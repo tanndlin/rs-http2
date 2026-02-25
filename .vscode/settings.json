@@ -1,0 +1,20 @@
+{
+    "restoreTerminals.terminals": [
+        {
+            "splitTerminals": [
+                {
+                    "name": "Run",
+                    "commands": [
+                        "nodemon -e rs -x 'cargo run -- dist'"
+                    ]
+                },
+                {
+                    "name": "Git",
+                    "commands": [
+                        "git status"
+                    ]
+                }
+            ]
+        }
+    ]
+}
