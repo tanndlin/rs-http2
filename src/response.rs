@@ -1,4 +1,7 @@
-use std::fmt::Display;
+use std::{
+    fmt::Display,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use crate::types::Header;
 
@@ -72,6 +75,17 @@ pub struct ResponseBuilder {
     body: Option<Vec<u8>>,
 }
 
+macro_rules! add_if_missing {
+    ($name:expr, $headers:expr, $callback:expr) => {
+        if !$headers.iter().any(|h| h.name == $name) {
+            $headers.push(Header {
+                name: $name.to_string(),
+                value: $callback(),
+            });
+        }
+    };
+}
+
 impl ResponseBuilder {
     pub fn new() -> Self {
         ResponseBuilder {
@@ -98,16 +112,13 @@ impl ResponseBuilder {
 
     pub fn build(self) -> Response {
         let mut headers = self.headers;
-        if !headers.iter().any(|h| h.name == "Content-Length") {
-            let length = match &self.body {
-                Some(b) => b.len(),
-                None => 0,
-            };
-            headers.push(Header {
-                name: "Content-Length".to_string(),
-                value: length.to_string(),
-            });
-        }
+
+        add_if_missing!("Date", headers, || chrono::Utc::now().to_rfc2822());
+        add_if_missing!("Content-Length", headers, || self
+            .body
+            .as_ref()
+            .map_or(0, |b| b.len())
+            .to_string());
 
         Response {
             status_code: self.status_code,
