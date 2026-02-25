@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 chrono = "0.4.44"
+openssl = { version = "0.10.75", features = ["vendored"] }
 threadpool = "1.8.1"

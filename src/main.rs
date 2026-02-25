@@ -27,8 +27,8 @@ fn main() {
         panic!("Expected 1 argument (serve folder)")
     }
 
-    let listener = TcpListener::bind("0.0.0.0:8080").expect("Unable to bind to 0.0.0.0:8080");
-    println!("Listening on: 0.0.0.0:8080");
+    let listener = TcpListener::bind("0.0.0.0:443").expect("Unable to bind to 0.0.0.0:443");
+    println!("Listening on: 0.0.0.0:443");
     println!("Serving files from: {}", args[1]);
 
     let cache = Arc::new(match cache_all_files(&args[1].clone()) {
@@ -76,6 +76,8 @@ fn handle_client(
                     req.path
                 };
                 req.path = format!("{}{}", serve_location, req.path);
+
+                dbg!(&req.headers);
 
                 let keep_alive = match req.headers.get("Connection") {
                     Some(value) => value == "Close",
