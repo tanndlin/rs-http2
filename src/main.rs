@@ -1,5 +1,5 @@
 use std::{
-    fs::read,
+    fs::{metadata, read},
     io::{Read, Write},
     net::{TcpListener, TcpStream},
     thread,
@@ -67,6 +67,7 @@ fn handle_client(mut stream: TcpStream, serve_location: String) {
 fn handle_request(request: &Request, serve_location: &str) -> Result<Response, String> {
     match request.method {
         Method::GET => handle_get(request, serve_location),
+        Method::HEAD => handle_head(request, serve_location),
         _ => Ok(Response::method_not_allowed()),
     }
 }
@@ -91,7 +92,35 @@ fn handle_get(request: &Request, serve_location: &str) -> Result<Response, Strin
     match read(full_path) {
         Ok(contents) => Ok(ResponseBuilder::new()
             .status_code(response::StatusCode::Ok)
+            .header("Content-Type".to_string(), content_type.into())
             .body(contents)
+            .build()),
+        Err(_) => Ok(Response::not_found()),
+    }
+}
+
+fn handle_head(request: &Request, serve_location: &str) -> Result<Response, String> {
+    let path = if request.path == "/" {
+        "index.html"
+    } else {
+        request.path.trim_start_matches("/")
+    };
+
+    let full_path = format!("{}/{}", serve_location, path);
+    let file_extension = full_path
+        .split(".")
+        .last()
+        .ok_or("No file extension found")?;
+    let content_type = ContentType::from_extension(file_extension);
+    if content_type == ContentType::Unknown {
+        return Ok(Response::bad_request());
+    }
+
+    match metadata(full_path) {
+        Ok(metadata) => Ok(ResponseBuilder::new()
+            .status_code(response::StatusCode::Ok)
+            .header("Content-Type".to_string(), content_type.into())
+            .header("Content-Length".to_string(), metadata.len().to_string())
             .build()),
         Err(_) => Ok(Response::not_found()),
     }

@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 pub struct Header {
     pub name: String,
     pub value: String,
@@ -22,5 +24,24 @@ impl ContentType {
             "css" => ContentType::CSS,
             _ => ContentType::Unknown,
         }
+    }
+}
+
+impl From<ContentType> for String {
+    fn from(val: ContentType) -> Self {
+        val.to_string()
+    }
+}
+
+impl Display for ContentType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let content_type_str = match self {
+            ContentType::HTML => "text/html",
+            ContentType::Text => "text/plain",
+            ContentType::JavaScript => "application/javascript",
+            ContentType::CSS => "text/css",
+            ContentType::Unknown => "application/octet-stream",
+        };
+        write!(f, "{}", content_type_str)
     }
 }
