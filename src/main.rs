@@ -10,6 +10,7 @@ use crate::{
     read::cache_all_files,
     request::{Method, Request},
     response::{Response, ResponseBuilder},
+    settings_frame::SettingsFrame,
     types::ContentType,
 };
 
@@ -19,6 +20,7 @@ use threadpool::ThreadPool;
 mod read;
 mod request;
 mod response;
+mod settings_frame;
 mod types;
 
 fn main() {
@@ -82,12 +84,24 @@ fn handle_client(
     cache: &Arc<HashMap<String, Vec<u8>>>,
 ) {
     let mut buffer = [0u8; 1024];
+
+    // Should start with the HTTP/2 Connection Preface
+    let read = stream.read(&mut buffer).unwrap();
+    if buffer[..24] != b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"[..] {
+        return;
+    }
+
+    let settings = SettingsFrame::from_bytes(&buffer[24..read]).unwrap();
+    dbg!(&settings);
+
     loop {
         match stream.read(&mut buffer) {
             Ok(0) => break, // Client closed connection
             Ok(_) => (),
             Err(_) => break,
         }
+
+        dbg!(String::from_utf8_lossy(&buffer));
 
         let (response, keep_alive) = match Request::from_bytes(buffer) {
             Ok(mut req) => {
