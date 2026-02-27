@@ -1,9 +1,12 @@
 use std::io::Read;
 
 use crate::{
-    http2::frames::{
-        frame::{FrameHeader, FrameType},
-        frame_trait::Frame,
+    http2::{
+        connection_state::ConnectionState,
+        frames::{
+            frame::{FrameHeader, FrameType},
+            frame_trait::Frame,
+        },
     },
     response::Response,
 };
@@ -109,8 +112,9 @@ impl TryFrom<&[u8]> for HeadersFrame {
     }
 }
 
-impl From<&Response> for HeadersFrame {
-    fn from(res: &Response) -> Self {
+impl<'a> From<(&Response, &mut ConnectionState<'a>)> for HeadersFrame {
+    fn from(pair: (&Response, &mut ConnectionState)) -> Self {
+        let (res, state) = pair;
         let mut bytes: Vec<(Vec<u8>, Vec<u8>)> = vec![];
 
         let binding = res.status_code.to_code().to_string();
@@ -125,8 +129,9 @@ impl From<&Response> for HeadersFrame {
             bytes.push((lower.into_bytes(), value.as_bytes().to_vec()));
         }
 
-        let mut encoder = hpack::Encoder::new();
-        let encoded = encoder.encode(bytes.iter().map(|(k, v)| (k.as_slice(), v.as_slice())));
+        let encoded = state
+            .encoder
+            .encode(bytes.iter().map(|(k, v)| (k.as_slice(), v.as_slice())));
         let header = FrameHeader::<HeadersFrameFlags> {
             length: encoded.len() as u32,
             frame_type: FrameType::Headers,

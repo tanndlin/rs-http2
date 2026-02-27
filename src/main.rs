@@ -9,6 +9,7 @@ use std::{
 
 use crate::{
     http2::{
+        connection_state::ConnectionState,
         frames::{
             data_frame::DataFrame,
             frame::{self, Frame, FrameHeader, FrameType},
@@ -87,8 +88,9 @@ fn main() {
 }
 
 fn handle_client(mut stream: SslStream<TcpStream>, cache: &Arc<HashMap<String, Vec<u8>>>) {
-    // Should start with the HTTP/2 Connection Preface
+    let mut state = ConnectionState::new();
 
+    // Should start with the HTTP/2 Connection Preface
     let mut preface = [0; 24];
     let _ = stream.read_exact(&mut preface).unwrap();
     if preface != b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"[..] {
@@ -137,7 +139,7 @@ fn handle_client(mut stream: SslStream<TcpStream>, cache: &Arc<HashMap<String, V
                         None
                     }
                     Frame::HeadersFrame(headers_frame) => {
-                        Some(handle_headers_frame(&mut buffer, &headers_frame).unwrap())
+                        Some(handle_headers_frame(&mut buffer, &headers_frame, &mut state).unwrap())
                     }
                     Frame::SettingsFrame(settings_frame) => {
                         if settings_frame.header.flags.ack {
@@ -171,7 +173,7 @@ fn handle_client(mut stream: SslStream<TcpStream>, cache: &Arc<HashMap<String, V
                 Err(e) => {
                     dbg!(&e);
                 }
-                Ok(res) => match send_response(&mut stream, &res) {
+                Ok(res) => match send_response(&mut stream, &res, &mut state) {
                     Ok(_) => (),
                     Err(e) => {
                         dbg!(&e);
@@ -191,6 +193,7 @@ fn handle_data_frame(data_frame: DataFrame) {
 fn handle_headers_frame(
     buffer: &mut GCBuffer,
     headers_frame: &HeadersFrame,
+    state: &mut ConnectionState,
 ) -> Result<Request, String> {
     dbg!("Handling received headers frame");
 
@@ -211,8 +214,8 @@ fn handle_headers_frame(
     }
 
     dbg!("Decoding");
-    let mut decoder = hpack::Decoder::new();
-    let decoded_headers = decoder
+    let decoded_headers = state
+        .decoder
         .decode(&compressed_headers)
         .map_err(|e| format!("Error decoding compressed headers: {:?}", e))?;
 
@@ -258,7 +261,7 @@ fn handle_get(
     cache: &Arc<HashMap<String, Vec<u8>>>,
 ) -> Result<Response, String> {
     let path = if &request.path == "/" {
-        "index.html"
+        "/index.html"
     } else {
         &request.path
     };
@@ -307,10 +310,14 @@ fn handle_head(
     }
 }
 
-fn send_response(stream: &mut SslStream<TcpStream>, res: &Response) -> Result<(), String> {
+fn send_response(
+    stream: &mut SslStream<TcpStream>,
+    res: &Response,
+    state: &mut ConnectionState,
+) -> Result<(), String> {
     dbg!(&res.body);
 
-    let headers_frame = HeadersFrame::from(res);
+    let headers_frame = HeadersFrame::from((res, state));
     let bytes: Vec<u8> = headers_frame.into();
     let _ = stream.write(&bytes);
 
