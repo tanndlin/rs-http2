@@ -7,20 +7,23 @@ use std::{
 };
 
 use crate::{
+    http2::frames::{
+        frame::{self, FramePrefix, FrameType},
+        frame_trait::Frame,
+    },
     read::cache_all_files,
     request::{Method, Request},
     response::{Response, ResponseBuilder},
-    settings_frame::SettingsFrame,
     types::ContentType,
 };
 
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod, SslStream};
 use threadpool::ThreadPool;
 
+mod http2;
 mod read;
 mod request;
 mod response;
-mod settings_frame;
 mod types;
 
 fn main() {
@@ -87,17 +90,52 @@ fn handle_client(
 
     // Should start with the HTTP/2 Connection Preface
     let read = stream.read(&mut buffer).unwrap();
+    dbg!(read);
     if buffer[..24] != b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"[..] {
         return;
     }
 
-    let settings = SettingsFrame::from_bytes(&buffer[24..read]).unwrap();
-    dbg!(&settings);
+    // Respond with preface PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n
+    let _ = stream.write("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".as_bytes());
+
+    // let settings_frame_prefix = FramePrefix::try_from(&buffer[24..]).unwrap();
+    // let settings = SettingsFrame::try_from((settings_frame_prefix, &buffer[24 + 9..read])).unwrap();
+    // dbg!(&settings);
+
+    let frame = frame::Frame::try_from(&buffer[24..read]).unwrap();
+    dbg!(&frame);
+
+    // TODO: Make sure first frame is settings
+
+    // Send ack of settings
+    let frame_prefix = FramePrefix {
+        length: 0,
+        frame_type: FrameType::Settings,
+        flags: 1,
+        stream_identifier: 0,
+    };
+    let frame_bytes: Vec<u8> = frame_prefix.into();
+    let _ = stream.write(&frame_bytes);
+
+    // Send my settings
+    let frame_prefix = FramePrefix {
+        length: 0,
+        frame_type: FrameType::Settings,
+        flags: 0,
+        stream_identifier: 0,
+    };
+    let frame_bytes: Vec<u8> = frame_prefix.into();
+    let _ = stream.write(&frame_bytes);
+
+    let next_frame = frame::Frame::try_from(&buffer[24 + frame.get_length()..read]).unwrap();
+    dbg!(&next_frame);
 
     loop {
         match stream.read(&mut buffer) {
             Ok(0) => break, // Client closed connection
-            Ok(_) => (),
+            Ok(read) => {
+                dbg!(read);
+            }
             Err(_) => break,
         }
 
