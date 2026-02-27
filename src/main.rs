@@ -10,6 +10,7 @@ use crate::{
     http2::frames::{
         frame::{self, FrameHeader, FrameType},
         frame_trait::Frame,
+        settings_frame::SettingsFrame,
     },
     read::cache_all_files,
     request::{Method, Request},
@@ -104,14 +105,12 @@ fn handle_client(
     // TODO: Make sure first frame is settings
 
     // Send ack of settings
-    let header = FrameHeader {
-        length: 0,
-        frame_type: FrameType::Settings,
-        flags: 1,
-        stream_identifier: 0,
-    };
-    let frame_bytes: Vec<u8> = header.into();
-    let _ = stream.write(&frame_bytes);
+    let ack = SettingsFrame::new_ack(0);
+
+    let bytes: Vec<u8> = ack.into();
+    let _ = stream.write(&bytes);
+
+    // TODO: Make a builder or something for SettingsFrame instantiation
 
     // Send my settings
     let header = FrameHeader {

@@ -1,4 +1,7 @@
-use crate::http2::frames::{frame::FrameHeader, frame_trait::Frame};
+use crate::http2::frames::{
+    frame::{FrameHeader, FrameType},
+    frame_trait::Frame,
+};
 
 #[derive(Debug, Default)]
 pub struct SettingsFrameFlags {
@@ -13,6 +16,16 @@ impl From<u8> for SettingsFrameFlags {
     }
 }
 
+impl From<SettingsFrameFlags> for u8 {
+    fn from(flags: SettingsFrameFlags) -> Self {
+        let mut bits = 0u8;
+
+        bits |= flags.ack as u8; // bit 0
+
+        bits
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct SettingsFrame {
     header: FrameHeader<SettingsFrameFlags>,
@@ -22,6 +35,20 @@ pub struct SettingsFrame {
     initial_window_size: Option<u32>,
     max_frame_size: Option<u32>,
     max_header_list_size: Option<u32>,
+}
+
+impl SettingsFrame {
+    pub fn new_ack(stream_identifier: u32) -> Self {
+        Self {
+            header: FrameHeader {
+                length: 0,
+                frame_type: FrameType::Settings,
+                flags: SettingsFrameFlags { ack: true },
+                stream_identifier,
+            },
+            ..Default::default()
+        }
+    }
 }
 
 impl TryFrom<&[u8]> for SettingsFrame {
@@ -65,6 +92,44 @@ impl TryFrom<&[u8]> for SettingsFrame {
         }
 
         Ok(ret)
+    }
+}
+
+impl From<SettingsFrame> for Vec<u8> {
+    fn from(frame: SettingsFrame) -> Self {
+        let mut ret: Vec<u8> = frame.header.into();
+
+        if let Some(val) = frame.header_table_size {
+            ret.push(1);
+            ret.extend(val.to_be_bytes());
+        }
+
+        if let Some(val) = frame.enable_push {
+            ret.push(2);
+            ret.push(val as u8);
+        }
+
+        if let Some(val) = frame.max_concurrent_streams {
+            ret.push(3);
+            ret.extend(val.to_be_bytes());
+        }
+
+        if let Some(val) = frame.initial_window_size {
+            ret.push(4);
+            ret.extend(val.to_be_bytes());
+        }
+
+        if let Some(val) = frame.max_frame_size {
+            ret.push(5);
+            ret.extend(val.to_be_bytes());
+        }
+
+        if let Some(val) = frame.max_header_list_size {
+            ret.push(6);
+            ret.extend(val.to_be_bytes());
+        }
+
+        ret
     }
 }
 
