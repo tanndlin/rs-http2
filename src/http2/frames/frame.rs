@@ -39,7 +39,8 @@ impl TryFrom<&[u8]> for Frame {
     fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
         if buf.len() < 9 {
             return Err(
-                "Tried to parse frame but buffer was less than 9 bytes for prefix".to_string(),
+                "Tried to parse frame but buffer was less than 9 bytes for frame header"
+                    .to_string(),
             );
         }
 
@@ -52,7 +53,7 @@ impl TryFrom<&[u8]> for Frame {
 }
 
 #[derive(Debug, Default)]
-pub struct FramePrefix<T>
+pub struct FrameHeader<T>
 where
     T: From<u8>,
 {
@@ -62,12 +63,12 @@ where
     pub stream_identifier: u32, // 31 bits (R infront)
 }
 
-impl<T> From<FramePrefix<T>> for Vec<u8>
+impl<T> From<FrameHeader<T>> for Vec<u8>
 where
     T: From<u8>,
     T: Into<u8>,
 {
-    fn from(val: FramePrefix<T>) -> Self {
+    fn from(val: FrameHeader<T>) -> Self {
         let mut buf = vec![
             (val.length >> 16) as u8,
             (val.length >> 8) as u8,
@@ -80,7 +81,7 @@ where
     }
 }
 
-impl<T> TryFrom<&[u8]> for FramePrefix<T>
+impl<T> TryFrom<&[u8]> for FrameHeader<T>
 where
     T: From<u8>,
 {
@@ -88,7 +89,7 @@ where
 
     fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
         if buf.len() < 9 {
-            return Err("Frame prefix must be at least 9 bytes".to_string());
+            return Err("Frame header must be at least 9 bytes".to_string());
         }
 
         let length = ((buf[0] as u32) << 16) | ((buf[1] as u32) << 8) | (buf[2] as u32);

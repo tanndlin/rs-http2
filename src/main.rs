@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     http2::frames::{
-        frame::{self, FramePrefix, FrameType},
+        frame::{self, FrameHeader, FrameType},
         frame_trait::Frame,
     },
     read::cache_all_files,
@@ -98,33 +98,29 @@ fn handle_client(
     // Respond with preface PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n
     let _ = stream.write("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".as_bytes());
 
-    // let settings_frame_prefix = FramePrefix::try_from(&buffer[24..]).unwrap();
-    // let settings = SettingsFrame::try_from((settings_frame_prefix, &buffer[24 + 9..read])).unwrap();
-    // dbg!(&settings);
-
     let frame = frame::Frame::try_from(&buffer[24..read]).unwrap();
     dbg!(&frame);
 
     // TODO: Make sure first frame is settings
 
     // Send ack of settings
-    let frame_prefix = FramePrefix {
+    let header = FrameHeader {
         length: 0,
         frame_type: FrameType::Settings,
         flags: 1,
         stream_identifier: 0,
     };
-    let frame_bytes: Vec<u8> = frame_prefix.into();
+    let frame_bytes: Vec<u8> = header.into();
     let _ = stream.write(&frame_bytes);
 
     // Send my settings
-    let frame_prefix = FramePrefix {
+    let header = FrameHeader {
         length: 0,
         frame_type: FrameType::Settings,
         flags: 0,
         stream_identifier: 0,
     };
-    let frame_bytes: Vec<u8> = frame_prefix.into();
+    let frame_bytes: Vec<u8> = header.into();
     let _ = stream.write(&frame_bytes);
 
     let next_frame = frame::Frame::try_from(&buffer[24 + frame.get_length()..read]).unwrap();

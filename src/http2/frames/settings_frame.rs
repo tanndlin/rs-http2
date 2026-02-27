@@ -1,4 +1,4 @@
-use crate::http2::frames::{frame::FramePrefix, frame_trait::Frame};
+use crate::http2::frames::{frame::FrameHeader, frame_trait::Frame};
 
 #[derive(Debug, Default)]
 pub struct SettingsFrameFlags {
@@ -15,7 +15,7 @@ impl From<u8> for SettingsFrameFlags {
 
 #[derive(Debug, Default)]
 pub struct SettingsFrame {
-    frame_prefix: FramePrefix<SettingsFrameFlags>,
+    header: FrameHeader<SettingsFrameFlags>,
     header_table_size: Option<u32>,
     enable_push: Option<bool>,
     max_concurrent_streams: Option<u32>,
@@ -28,12 +28,12 @@ impl TryFrom<&[u8]> for SettingsFrame {
     type Error = String;
 
     fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
-        let frame_prefix = FramePrefix::try_from(buf)?;
-        let length = frame_prefix.length as usize;
+        let header = FrameHeader::try_from(buf)?;
+        let length = header.length as usize;
         let buf = &buf[9..];
         if buf.len() < length {
             return Err(format!(
-                "Settings frame length does not match the length in the frame prefix. {} out of {length} bytes left",
+                "Settings frame length does not match the length in the frame header. {} out of {length} bytes left",
                 buf.len()
             ));
         }
@@ -43,7 +43,7 @@ impl TryFrom<&[u8]> for SettingsFrame {
         }
 
         let mut ret = Self {
-            frame_prefix,
+            header,
             ..Default::default()
         };
         let mut offset = 0;
@@ -70,6 +70,6 @@ impl TryFrom<&[u8]> for SettingsFrame {
 
 impl Frame for SettingsFrame {
     fn get_length(&self) -> usize {
-        9 + self.frame_prefix.length as usize
+        9 + self.header.length as usize
     }
 }
