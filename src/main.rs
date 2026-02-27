@@ -8,8 +8,10 @@ use std::{
 
 use crate::{
     http2::frames::{
-        frame::{self, FrameHeader, FrameType},
-        frame_trait::Frame,
+        data_frame::DataFrame,
+        frame::{self, Frame, FrameHeader, FrameType},
+        frame_trait::Frame as _,
+        headers_frame::{self, HeadersFrame},
         settings_frame::SettingsFrame,
     },
     read::cache_all_files,
@@ -87,32 +89,18 @@ fn handle_client(
     serve_location: &str,
     cache: &Arc<HashMap<String, Vec<u8>>>,
 ) {
-    let mut buffer = [0u8; 1024];
-
     // Should start with the HTTP/2 Connection Preface
-    let read = stream.read(&mut buffer).unwrap();
-    dbg!(read);
-    if buffer[..24] != b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"[..] {
+
+    let mut preface = [0; 24];
+    let _ = stream.read_exact(&mut preface).unwrap();
+    if preface != b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"[..] {
         return;
     }
 
-    // Respond with preface PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n
-    let _ = stream.write("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".as_bytes());
-
-    let frame = frame::Frame::try_from(&buffer[24..read]).unwrap();
-    dbg!(&frame);
-
     // TODO: Make sure first frame is settings
 
-    // Send ack of settings
-    let ack = SettingsFrame::new_ack(0);
-
-    let bytes: Vec<u8> = ack.into();
-    let _ = stream.write(&bytes);
-
-    // TODO: Make a builder or something for SettingsFrame instantiation
-
     // Send my settings
+    // TODO: Make a builder or something for SettingsFrame instantiation
     let header = FrameHeader {
         length: 0,
         frame_type: FrameType::Settings,
@@ -122,110 +110,112 @@ fn handle_client(
     let frame_bytes: Vec<u8> = header.into();
     let _ = stream.write(&frame_bytes);
 
-    let next_frame = frame::Frame::try_from(&buffer[24 + frame.get_length()..read]).unwrap();
-    dbg!(&next_frame);
-
+    let mut buffer = [0u8; 1024];
     loop {
-        match stream.read(&mut buffer) {
-            Ok(0) => break, // Client closed connection
+        let read = match stream.read(&mut buffer) {
+            Ok(0) => {
+                dbg!("Client closed connection");
+                break;
+            } // Client closed connection
             Ok(read) => {
                 dbg!(read);
+                read
             }
-            Err(_) => break,
-        }
+            Err(e) => {
+                dbg!("Error reading from stream", e);
+                break;
+            }
+        };
 
-        dbg!(String::from_utf8_lossy(&buffer));
+        match frame::Frame::try_from(&buffer[..read]) {
+            Err(e) => {
+                dbg!(&e);
+                break;
+            }
+            Ok(f) => {
+                dbg!(&f);
+                match f {
+                    Frame::DataFrame(data_frame) => handle_data_frame(data_frame),
+                    Frame::HeadersFrame(headers_frame) => {
+                        handle_headers_frame(&mut stream, &headers_frame).unwrap();
+                    }
+                    Frame::SettingsFrame(settings_frame) => {
+                        if settings_frame.header.flags.ack {
+                            continue;
+                        }
 
-        let (response, keep_alive) = match Request::from_bytes(buffer) {
-            Ok(mut req) => {
-                req.path = if req.path == "/" {
-                    "/index.html".to_string()
-                } else {
-                    req.path
-                };
-                req.path = format!("{}{}", serve_location, req.path);
-
-                dbg!(&req.headers);
-
-                let keep_alive = match req.headers.get("Connection") {
-                    Some(value) => value == "Close",
-                    None => true,
-                };
-
-                match handle_request(&req, cache) {
-                    Ok(res) => (res, keep_alive),
-                    Err(e) => {
-                        println!("Encountered server error {e}");
-                        (Response::internal_server_error(), false)
+                        // Send ack
+                        // TODO: Send correct stream ident
+                        let ack = SettingsFrame::new_ack(0);
+                        let bytes: Vec<u8> = ack.into();
+                        let _ = stream.write(&bytes);
                     }
                 }
             }
-            Err(_) => (Response::bad_request(), false),
-        };
-
-        let _ = stream.write(&response.to_bytes());
-
-        if !keep_alive {
-            break;
         }
     }
+
+    println!("Outside read loop");
 }
 
-fn handle_request(
-    request: &Request,
-    cache: &Arc<HashMap<String, Vec<u8>>>,
-) -> Result<Response, String> {
-    match request.method {
-        Method::GET => handle_get(request, cache),
-        Method::HEAD => handle_head(request, cache),
-        _ => Ok(Response::method_not_allowed()),
-    }
+fn handle_data_frame(data_frame: DataFrame) {
+    println!("Received data frame");
 }
 
-fn handle_get(
-    request: &Request,
-    cache: &Arc<HashMap<String, Vec<u8>>>,
-) -> Result<Response, String> {
-    let file_extension = &request
-        .path
-        .split(".")
-        .last()
-        .ok_or("No file extension found")?;
-    let content_type = ContentType::from_extension(file_extension);
-    if content_type == ContentType::Unknown {
-        return Ok(Response::bad_request());
+fn handle_headers_frame(
+    stream: &mut SslStream<TcpStream>,
+    headers_frame: &HeadersFrame,
+) -> Result<(), String> {
+    // match headers_frame.header.flags.end_headers {
+    //     true => todo!(),
+    //     false => todo!(),
+    // }
+
+    dbg!("Handling received headers frame");
+
+    let mut compressed_headers = headers_frame.header_block_fragment.clone();
+    if !headers_frame.header.flags.end_headers {
+        // TODO: This length reconstruction is awful
+        loop {
+            let mut length_buffer = [0u8; 3];
+            let to_read = stream.read_exact(&mut length_buffer);
+            let length = {
+                let mut padded = [0; 4];
+                padded.copy_from_slice(&length_buffer);
+                u32::from_be_bytes(padded) as usize
+            };
+
+            let mut buffer = vec![0u8; length + 6];
+            let _ = stream.read_exact(&mut buffer);
+            // put the 3 length bytes back
+            let mut buffer_with_length = vec![];
+            buffer_with_length.extend_from_slice(&length_buffer);
+            buffer_with_length.extend_from_slice(&buffer);
+
+            let next_frame = HeadersFrame::try_from(&buffer[..]).unwrap();
+            compressed_headers.extend_from_slice(&next_frame.header_block_fragment);
+
+            if next_frame.header.flags.end_headers {
+                break;
+            }
+        }
     }
 
-    match cache.get(&request.path) {
-        Some(contents) => Ok(ResponseBuilder::new()
-            .status_code(response::StatusCode::Ok)
-            .header("Content-Type".to_string(), content_type.into())
-            .body(contents.clone())
-            .build()),
-        None => Ok(Response::not_found()),
-    }
-}
+    dbg!("Decoding");
+    let mut decoder = hpack::Decoder::new();
+    let decoded_headers = decoder
+        .decode(&compressed_headers)
+        .map_err(|e| format!("Error decoding compressed headers: {:?}", e))?;
 
-fn handle_head(
-    request: &Request,
-    cache: &Arc<HashMap<String, Vec<u8>>>,
-) -> Result<Response, String> {
-    let file_extension = &request
-        .path
-        .split(".")
-        .last()
-        .ok_or("No file extension found")?;
-    let content_type = ContentType::from_extension(file_extension);
-    if content_type == ContentType::Unknown {
-        return Ok(Response::bad_request());
+    dbg!(&decoded_headers);
+
+    for (name, value) in decoded_headers {
+        let name = String::from_utf8_lossy(&name);
+        let value = String::from_utf8_lossy(&value);
+        dbg!(&name, &value);
     }
 
-    match cache.get(&request.path) {
-        Some(metadata) => Ok(ResponseBuilder::new()
-            .status_code(response::StatusCode::Ok)
-            .header("Content-Type".to_string(), content_type.into())
-            .header("Content-Length".to_string(), metadata.len().to_string())
-            .build()),
-        None => Ok(Response::not_found()),
-    }
+    let stream_ident = headers_frame.header.stream_identifier;
+
+    Ok(())
 }

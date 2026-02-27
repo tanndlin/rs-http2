@@ -1,10 +1,13 @@
-use crate::http2::frames::{data_frame::DataFrame, frame_trait, settings_frame::SettingsFrame};
+use crate::http2::frames::{
+    data_frame::DataFrame, frame_trait, headers_frame::HeadersFrame, settings_frame::SettingsFrame,
+};
 
 #[repr(u8)]
 #[derive(Debug, Default)]
 pub enum FrameType {
     #[default]
     Data = 0,
+    Headers = 1,
     Settings = 4,
 }
 
@@ -12,8 +15,9 @@ impl From<u8> for FrameType {
     fn from(value: u8) -> Self {
         match value {
             0 => FrameType::Data,
+            1 => FrameType::Headers,
             4 => FrameType::Settings,
-            _ => FrameType::Data, // Default case for unknown frame types
+            _ => FrameType::Data, // TODO: Verify if I should panic or discard
         }
     }
 }
@@ -21,6 +25,7 @@ impl From<u8> for FrameType {
 #[derive(Debug)]
 pub enum Frame {
     DataFrame(DataFrame),
+    HeadersFrame(HeadersFrame),
     SettingsFrame(SettingsFrame),
 }
 
@@ -28,6 +33,7 @@ impl frame_trait::Frame for Frame {
     fn get_length(&self) -> usize {
         match self {
             Frame::DataFrame(f) => f.get_length(),
+            Frame::HeadersFrame(f) => f.get_length(),
             Frame::SettingsFrame(f) => f.get_length(),
         }
     }
@@ -47,6 +53,7 @@ impl TryFrom<&[u8]> for Frame {
         let frame_type = FrameType::from(buf[3]);
         Ok(match frame_type {
             FrameType::Data => Frame::DataFrame(DataFrame::try_from(buf)?),
+            FrameType::Headers => Frame::HeadersFrame(HeadersFrame::try_from(buf)?),
             FrameType::Settings => Frame::SettingsFrame(SettingsFrame::try_from(buf)?),
         })
     }

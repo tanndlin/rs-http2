@@ -28,7 +28,7 @@ impl From<SettingsFrameFlags> for u8 {
 
 #[derive(Debug, Default)]
 pub struct SettingsFrame {
-    header: FrameHeader<SettingsFrameFlags>,
+    pub header: FrameHeader<SettingsFrameFlags>,
     header_table_size: Option<u32>,
     enable_push: Option<bool>,
     max_concurrent_streams: Option<u32>,
