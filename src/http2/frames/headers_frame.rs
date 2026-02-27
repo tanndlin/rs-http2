@@ -111,28 +111,27 @@ impl TryFrom<&[u8]> for HeadersFrame {
 
 impl From<&Response> for HeadersFrame {
     fn from(res: &Response) -> Self {
-        let mut bytes = vec![];
+        let mut bytes: Vec<(Vec<u8>, Vec<u8>)> = vec![];
 
         let binding = res.status_code.to_code().to_string();
-        bytes.push((":status".as_bytes(), binding.as_bytes()));
+        dbg!(&res.status_code);
+        dbg!(&binding);
+        bytes.push((":status".as_bytes().to_vec(), binding.as_bytes().to_vec()));
 
         dbg!(&res.headers);
 
         for (name, value) in &res.headers {
-            match name.as_str() {
-                "status" | "Content-Length" => (),
-                _ => continue,
-            }
-            bytes.push((name.as_bytes(), value.as_bytes()));
+            let lower = name.to_lowercase();
+            bytes.push((lower.into_bytes(), value.as_bytes().to_vec()));
         }
 
         let mut encoder = hpack::Encoder::new();
-        let encoded = encoder.encode(bytes);
+        let encoded = encoder.encode(bytes.iter().map(|(k, v)| (k.as_slice(), v.as_slice())));
         let header = FrameHeader::<HeadersFrameFlags> {
             length: encoded.len() as u32,
             frame_type: FrameType::Headers,
             flags: HeadersFrameFlags {
-                end_stream: true,
+                end_stream: false,
                 end_headers: true,
                 padded: false,
                 priority: false,

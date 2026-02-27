@@ -8,12 +8,13 @@ use std::{
 };
 
 use crate::{
+    gc_buffer::GCBuffer,
     http2::frames::{
         data_frame::DataFrame,
         frame::{self, Frame, FrameHeader, FrameType},
         frame_trait::Frame as _,
         headers_frame::{self, HeadersFrame},
-        settings_frame::SettingsFrame,
+        settings_frame::{SettingsFrame, SettingsFrameFlags},
     },
     read::cache_all_files,
     request::{Method, Request},
@@ -24,6 +25,7 @@ use crate::{
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod, SslStream};
 use threadpool::ThreadPool;
 
+mod gc_buffer;
 mod http2;
 mod read;
 mod request;
@@ -95,20 +97,9 @@ fn handle_client(mut stream: SslStream<TcpStream>, cache: &Arc<HashMap<String, V
 
     // TODO: Make sure first frame is settings
 
-    // Send my settings
-    // TODO: Make a builder or something for SettingsFrame instantiation
-    let header = FrameHeader {
-        length: 0,
-        frame_type: FrameType::Settings,
-        flags: 0,
-        stream_identifier: 0,
-    };
-    let frame_bytes: Vec<u8> = header.into();
-    let _ = stream.write(&frame_bytes);
-
-    let mut buffer = [0u8; 1024];
+    let mut buffer = GCBuffer::new();
     loop {
-        let read = match stream.read(&mut buffer) {
+        match buffer.read_from_stream(&mut stream) {
             Ok(0) => {
                 dbg!("Client closed connection");
                 break;
@@ -123,7 +114,17 @@ fn handle_client(mut stream: SslStream<TcpStream>, cache: &Arc<HashMap<String, V
             }
         };
 
-        let req = match frame::Frame::try_from(&buffer[..read]) {
+        let length_bytes = buffer.peek(3);
+        let length = u32::from_be_bytes([0, length_bytes[0], length_bytes[1], length_bytes[2]]);
+        dbg!(&length);
+        let full_frame_length = (length + 9) as usize;
+        if buffer.len() < full_frame_length {
+            continue;
+        }
+
+        println!("Parsing frame of length {full_frame_length}");
+
+        let req = match frame::Frame::try_from(&buffer.read_n_bytes(full_frame_length)[..]) {
             Err(e) => {
                 dbg!(&e);
                 break;
@@ -136,12 +137,23 @@ fn handle_client(mut stream: SslStream<TcpStream>, cache: &Arc<HashMap<String, V
                         None
                     }
                     Frame::HeadersFrame(headers_frame) => {
-                        Some(handle_headers_frame(&mut stream, &headers_frame).unwrap())
+                        Some(handle_headers_frame(&mut buffer, &headers_frame).unwrap())
                     }
                     Frame::SettingsFrame(settings_frame) => {
                         if settings_frame.header.flags.ack {
                             continue;
                         }
+
+                        // Send my settings
+                        // TODO: Make a builder or something for SettingsFrame instantiation
+                        let header = FrameHeader::<SettingsFrameFlags> {
+                            length: 0,
+                            frame_type: FrameType::Settings,
+                            flags: SettingsFrameFlags { ack: false },
+                            stream_identifier: 0,
+                        };
+                        let frame_bytes: Vec<u8> = header.into();
+                        let _ = stream.write(&frame_bytes);
 
                         // Send ack
                         // TODO: Send correct stream ident
@@ -177,30 +189,18 @@ fn handle_data_frame(data_frame: DataFrame) {
 }
 
 fn handle_headers_frame(
-    stream: &mut SslStream<TcpStream>,
+    buffer: &mut GCBuffer,
     headers_frame: &HeadersFrame,
 ) -> Result<Request, String> {
     dbg!("Handling received headers frame");
 
     let mut compressed_headers = headers_frame.header_block_fragment.clone();
     if !headers_frame.header.flags.end_headers {
-        // TODO: This length reconstruction is awful
         loop {
-            let mut length_buffer = [0u8; 3];
-            let to_read = stream.read_exact(&mut length_buffer);
-            let length = {
-                let mut padded = [0; 4];
-                padded.copy_from_slice(&length_buffer);
-                u32::from_be_bytes(padded) as usize
-            };
-
-            let mut buffer = vec![0u8; length + 6];
-            let _ = stream.read_exact(&mut buffer);
-            // put the 3 length bytes back
-            let mut buffer_with_length = vec![];
-            buffer_with_length.extend_from_slice(&length_buffer);
-            buffer_with_length.extend_from_slice(&buffer);
-
+            let length_bytes = buffer.peek(3);
+            let length =
+                u32::from_be_bytes([0, length_bytes[0], length_bytes[1], length_bytes[2]]) as usize;
+            let buffer = buffer.read_n_bytes(length + 9);
             let next_frame = HeadersFrame::try_from(&buffer[..]).unwrap();
             compressed_headers.extend_from_slice(&next_frame.header_block_fragment);
 

@@ -1,5 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
+#[derive(Debug)]
 pub enum StatusCode {
     Ok,
     NotFound,

@@ -6,6 +6,7 @@ pub enum ImageType {
     PNG,
     JPEG,
     GIF,
+    Icon,
 }
 
 #[derive(PartialEq, Eq)]
@@ -30,6 +31,7 @@ impl ContentType {
             "json" => ContentType::JSON,
             "png" => ContentType::Image(ImageType::PNG),
             "jpg" | "jpeg" => ContentType::Image(ImageType::JPEG),
+            "ico" => ContentType::Image(ImageType::Icon),
             "gif" => ContentType::Image(ImageType::GIF),
             _ => ContentType::Unknown,
         }
@@ -53,6 +55,7 @@ impl Display for ContentType {
             ContentType::Image(ImageType::PNG) => "image/png",
             ContentType::Image(ImageType::JPEG) => "image/jpeg",
             ContentType::Image(ImageType::GIF) => "image/gif",
+            ContentType::Image(ImageType::Icon) => "image/x-icon",
             ContentType::Unknown => "application/octet-stream",
         };
         write!(f, "{}", content_type_str)
