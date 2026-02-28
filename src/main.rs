@@ -314,8 +314,6 @@ fn send_response(
     res: &Response,
     state: &mut ConnectionState,
 ) -> Result<(), String> {
-    dbg!(&res.body);
-
     let headers_frame = HeadersFrame::from((res, state));
     let bytes: Vec<u8> = headers_frame.into();
     let _ = stream.write(&bytes);
