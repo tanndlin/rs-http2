@@ -134,14 +134,14 @@ fn handle_client(mut stream: SslStream<TcpStream>, cache: &Arc<HashMap<String, V
             Ok(f) => {
                 dbg!(&f);
                 match f {
-                    Frame::DataFrame(data_frame) => {
+                    Frame::Data(data_frame) => {
                         handle_data_frame(data_frame);
                         None
                     }
-                    Frame::HeadersFrame(headers_frame) => {
+                    Frame::Headers(headers_frame) => {
                         Some(handle_headers_frame(&mut buffer, &headers_frame, &mut state).unwrap())
                     }
-                    Frame::SettingsFrame(settings_frame) => {
+                    Frame::Settings(settings_frame) => {
                         if settings_frame.header.flags.ack {
                             continue;
                         }

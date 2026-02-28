@@ -24,17 +24,17 @@ impl From<u8> for FrameType {
 
 #[derive(Debug)]
 pub enum Frame {
-    DataFrame(DataFrame),
-    HeadersFrame(HeadersFrame),
-    SettingsFrame(SettingsFrame),
+    Data(DataFrame),
+    Headers(HeadersFrame),
+    Settings(SettingsFrame),
 }
 
 impl frame_trait::Frame for Frame {
     fn get_length(&self) -> usize {
         match self {
-            Frame::DataFrame(f) => f.get_length(),
-            Frame::HeadersFrame(f) => f.get_length(),
-            Frame::SettingsFrame(f) => f.get_length(),
+            Frame::Data(f) => f.get_length(),
+            Frame::Headers(f) => f.get_length(),
+            Frame::Settings(f) => f.get_length(),
         }
     }
 }
@@ -52,9 +52,9 @@ impl TryFrom<&[u8]> for Frame {
 
         let frame_type = FrameType::from(buf[3]);
         Ok(match frame_type {
-            FrameType::Data => Frame::DataFrame(DataFrame::try_from(buf)?),
-            FrameType::Headers => Frame::HeadersFrame(HeadersFrame::try_from(buf)?),
-            FrameType::Settings => Frame::SettingsFrame(SettingsFrame::try_from(buf)?),
+            FrameType::Data => Frame::Data(DataFrame::try_from(buf)?),
+            FrameType::Headers => Frame::Headers(HeadersFrame::try_from(buf)?),
+            FrameType::Settings => Frame::Settings(SettingsFrame::try_from(buf)?),
         })
     }
 }
