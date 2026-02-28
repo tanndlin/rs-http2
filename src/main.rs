@@ -22,6 +22,7 @@ use crate::{
     request::{Method, Request},
     response::{Response, ResponseBuilder},
     types::ContentType,
+    util::u32_from_3_bytes,
 };
 
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod, SslStream};
@@ -32,6 +33,7 @@ mod read;
 mod request;
 mod response;
 mod types;
+mod util;
 
 fn main() {
     // Log args
@@ -116,8 +118,7 @@ fn handle_client(mut stream: SslStream<TcpStream>, cache: &Arc<HashMap<String, V
             }
         };
 
-        let length_bytes = buffer.peek(3);
-        let length = u32::from_be_bytes([0, length_bytes[0], length_bytes[1], length_bytes[2]]);
+        let length = u32_from_3_bytes(buffer.peek::<3>());
         dbg!(&length);
         let full_frame_length = (length + 9) as usize;
         if buffer.len() < full_frame_length {
@@ -200,9 +201,7 @@ fn handle_headers_frame(
     let mut compressed_headers = headers_frame.header_block_fragment.clone();
     if !headers_frame.header.flags.end_headers {
         loop {
-            let length_bytes = buffer.peek(3);
-            let length =
-                u32::from_be_bytes([0, length_bytes[0], length_bytes[1], length_bytes[2]]) as usize;
+            let length = u32_from_3_bytes(buffer.peek::<3>()) as usize;
             let buffer = buffer.read_n_bytes(length + 9);
             let next_frame = HeadersFrame::try_from(&buffer[..]).unwrap();
             compressed_headers.extend_from_slice(&next_frame.header_block_fragment);
