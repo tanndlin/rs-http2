@@ -1,13 +1,15 @@
-use crate::http2::frames::{frame::FrameHeader, frame_trait::Frame};
+use crate::http2::frames::frame::FrameHeader;
 
+#[derive(Debug)]
 pub struct PriorityFrameFlags {}
 
 impl From<u8> for PriorityFrameFlags {
     fn from(value: u8) -> Self {
-        todo!()
+        Self {}
     }
 }
 
+#[derive(Debug)]
 pub struct PriorityFrame {
     header: FrameHeader<PriorityFrameFlags>,
     pub exclusive: bool,        // 1 bit
@@ -31,11 +33,5 @@ impl TryFrom<&[u8]> for PriorityFrame {
             stream_dependency,
             weight,
         })
-    }
-}
-
-impl Frame for PriorityFrame {
-    fn get_length(&self) -> usize {
-        self.header.length as usize
     }
 }

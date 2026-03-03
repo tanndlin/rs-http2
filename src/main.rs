@@ -15,6 +15,7 @@ use crate::{
             data_frame::DataFrame,
             frame::{self, Frame, FrameHeader, FrameType},
             headers_frame::HeadersFrame,
+            ping_frame::PingFrame,
             settings_frame::{SettingsFrame, SettingsFrameFlags},
         },
         gc_buffer::GCBuffer,
@@ -167,6 +168,16 @@ fn handle_client(mut stream: SslStream<TcpStream>, cache: &Arc<HashMap<String, V
                         let _ = stream.write(&bytes);
                         None
                     }
+                    Frame::Ping(ping_frame) => {
+                        if !ping_frame.header.flags.ack {
+                            let ack = PingFrame::ack();
+                            let bytes: Vec<u8> = ack.into();
+                            let _ = stream.write(&bytes);
+                        }
+
+                        None
+                    }
+                    Frame::Priority(priority_frame) => handle_priority_frame(priority_frame),
                 }
             }
         };
@@ -187,6 +198,13 @@ fn handle_client(mut stream: SslStream<TcpStream>, cache: &Arc<HashMap<String, V
     }
 
     println!("Outside read loop");
+}
+
+fn handle_priority_frame(
+    priority_frame: http2::frames::priority_frame::PriorityFrame,
+) -> Option<Request> {
+    println!("recv prio frame");
+    None
 }
 
 fn handle_data_frame(data_frame: DataFrame) {

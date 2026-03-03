@@ -1,5 +1,6 @@
 use crate::http2::frames::{
-    data_frame::DataFrame, frame_trait, headers_frame::HeadersFrame, settings_frame::SettingsFrame,
+    data_frame::DataFrame, headers_frame::HeadersFrame, ping_frame::PingFrame,
+    priority_frame::PriorityFrame, settings_frame::SettingsFrame,
 };
 
 #[repr(u8)]
@@ -8,7 +9,9 @@ pub enum FrameType {
     #[default]
     Data = 0,
     Headers = 1,
+    Priority = 2,
     Settings = 4,
+    Ping = 6,
 }
 
 impl From<u8> for FrameType {
@@ -16,7 +19,9 @@ impl From<u8> for FrameType {
         match value {
             0 => FrameType::Data,
             1 => FrameType::Headers,
+            2 => FrameType::Priority,
             4 => FrameType::Settings,
+            6 => FrameType::Ping,
             _ => FrameType::Data, // TODO: Verify if I should panic or discard
         }
     }
@@ -26,17 +31,9 @@ impl From<u8> for FrameType {
 pub enum Frame {
     Data(DataFrame),
     Headers(HeadersFrame),
+    Priority(PriorityFrame),
     Settings(SettingsFrame),
-}
-
-impl frame_trait::Frame for Frame {
-    fn get_length(&self) -> usize {
-        match self {
-            Frame::Data(f) => f.get_length(),
-            Frame::Headers(f) => f.get_length(),
-            Frame::Settings(f) => f.get_length(),
-        }
-    }
+    Ping(PingFrame),
 }
 
 impl TryFrom<&[u8]> for Frame {
@@ -54,7 +51,9 @@ impl TryFrom<&[u8]> for Frame {
         Ok(match frame_type {
             FrameType::Data => Frame::Data(DataFrame::try_from(buf)?),
             FrameType::Headers => Frame::Headers(HeadersFrame::try_from(buf)?),
+            FrameType::Priority => Frame::Priority(PriorityFrame::try_from(buf)?),
             FrameType::Settings => Frame::Settings(SettingsFrame::try_from(buf)?),
+            FrameType::Ping => Frame::Ping(PingFrame::try_from(buf)?),
         })
     }
 }

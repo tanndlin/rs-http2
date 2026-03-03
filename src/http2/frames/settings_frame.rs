@@ -1,7 +1,4 @@
-use crate::http2::frames::{
-    frame::{FrameHeader, FrameType},
-    frame_trait::Frame,
-};
+use crate::http2::frames::frame::{FrameHeader, FrameType};
 
 #[derive(Debug, Default)]
 pub struct SettingsFrameFlags {
@@ -130,11 +127,5 @@ impl From<SettingsFrame> for Vec<u8> {
         }
 
         ret
-    }
-}
-
-impl Frame for SettingsFrame {
-    fn get_length(&self) -> usize {
-        9 + self.header.length as usize
     }
 }

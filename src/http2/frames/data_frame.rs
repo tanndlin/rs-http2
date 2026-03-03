@@ -1,10 +1,7 @@
 use std::io::Read;
 
 use crate::{
-    http2::frames::{
-        frame::{FrameHeader, FrameType},
-        frame_trait::Frame,
-    },
+    http2::frames::frame::{FrameHeader, FrameType},
     response::Response,
 };
 
@@ -41,12 +38,6 @@ pub struct DataFrame {
     header: FrameHeader<DataFrameFlags>,
     pad_length: u8, // Exists if padding flag is set
     data: Vec<u8>,
-}
-
-impl Frame for DataFrame {
-    fn get_length(&self) -> usize {
-        self.header.length as usize
-    }
 }
 
 impl TryFrom<&[u8]> for DataFrame {

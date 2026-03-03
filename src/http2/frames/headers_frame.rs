@@ -3,10 +3,7 @@ use std::io::Read;
 use crate::{
     http2::{
         connection_state::ConnectionState,
-        frames::{
-            frame::{FrameHeader, FrameType},
-            frame_trait::Frame,
-        },
+        frames::frame::{FrameHeader, FrameType},
     },
     response::Response,
 };
@@ -49,12 +46,6 @@ pub struct HeadersFrame {
     stream_dependency: Option<u32>, // 31 bits
     weight: Option<u8>,
     pub header_block_fragment: Vec<u8>,
-}
-
-impl Frame for HeadersFrame {
-    fn get_length(&self) -> usize {
-        self.header.length as usize
-    }
 }
 
 impl TryFrom<&[u8]> for HeadersFrame {
