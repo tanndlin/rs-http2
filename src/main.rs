@@ -11,6 +11,7 @@ use crate::{
     http2::{
         connection_state::ConnectionState,
         frames::{
+            continuation_frame::ContinuationFrame,
             data_frame::DataFrame,
             frame::{self, Frame, FrameHeader, FrameType},
             headers_frame::HeadersFrame,
@@ -203,7 +204,7 @@ fn handle_headers_frame(
         loop {
             let length = u32_from_3_bytes(buffer.peek::<3>()) as usize;
             let buffer = buffer.read_n_bytes(length + 9);
-            let next_frame = HeadersFrame::try_from(&buffer[..]).unwrap();
+            let next_frame = ContinuationFrame::try_from(&buffer[..]).unwrap();
             compressed_headers.extend_from_slice(&next_frame.header_block_fragment);
 
             if next_frame.header.flags.end_headers {
