@@ -178,6 +178,7 @@ fn handle_client(mut stream: SslStream<TcpStream>, cache: &Arc<HashMap<String, V
                         None
                     }
                     Frame::Priority(priority_frame) => handle_priority_frame(priority_frame),
+                    Frame::RstStream(rst_frame) => handle_rst_frame(rst_frame),
                 }
             }
         };
@@ -198,6 +199,11 @@ fn handle_client(mut stream: SslStream<TcpStream>, cache: &Arc<HashMap<String, V
     }
 
     println!("Outside read loop");
+}
+
+fn handle_rst_frame(rst_frame: http2::frames::rst_frame::RstFrame) -> Option<Request> {
+    println!("recv rst frame");
+    None
 }
 
 fn handle_priority_frame(

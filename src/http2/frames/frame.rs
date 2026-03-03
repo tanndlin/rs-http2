@@ -1,6 +1,6 @@
 use crate::http2::frames::{
     data_frame::DataFrame, headers_frame::HeadersFrame, ping_frame::PingFrame,
-    priority_frame::PriorityFrame, settings_frame::SettingsFrame,
+    priority_frame::PriorityFrame, rst_frame::RstFrame, settings_frame::SettingsFrame,
 };
 
 #[repr(u8)]
@@ -10,6 +10,7 @@ pub enum FrameType {
     Data = 0,
     Headers = 1,
     Priority = 2,
+    RstStream = 3,
     Settings = 4,
     Ping = 6,
 }
@@ -20,6 +21,7 @@ impl From<u8> for FrameType {
             0 => FrameType::Data,
             1 => FrameType::Headers,
             2 => FrameType::Priority,
+            3 => FrameType::RstStream,
             4 => FrameType::Settings,
             6 => FrameType::Ping,
             _ => FrameType::Data, // TODO: Verify if I should panic or discard
@@ -32,6 +34,7 @@ pub enum Frame {
     Data(DataFrame),
     Headers(HeadersFrame),
     Priority(PriorityFrame),
+    RstStream(RstFrame),
     Settings(SettingsFrame),
     Ping(PingFrame),
 }
@@ -52,6 +55,7 @@ impl TryFrom<&[u8]> for Frame {
             FrameType::Data => Frame::Data(DataFrame::try_from(buf)?),
             FrameType::Headers => Frame::Headers(HeadersFrame::try_from(buf)?),
             FrameType::Priority => Frame::Priority(PriorityFrame::try_from(buf)?),
+            FrameType::RstStream => Frame::RstStream(RstFrame::try_from(buf)?),
             FrameType::Settings => Frame::Settings(SettingsFrame::try_from(buf)?),
             FrameType::Ping => Frame::Ping(PingFrame::try_from(buf)?),
         })
