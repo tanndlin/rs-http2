@@ -1,6 +1,7 @@
 pub mod continuation_frame;
 pub mod data_frame;
 pub mod frame;
+pub mod go_away_frame;
 pub mod headers_frame;
 pub mod ping_frame;
 pub mod priority_frame;

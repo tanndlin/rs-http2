@@ -182,6 +182,7 @@ fn handle_client(mut stream: SslStream<TcpStream>, cache: &Arc<HashMap<String, V
                     Frame::PushPromise(push_promise_frame) => {
                         handle_push_promise(push_promise_frame)
                     }
+                    Frame::GoAway(go_away_frame) => handle_go_away_frame(go_away_frame),
                 }
             }
         };
@@ -202,6 +203,13 @@ fn handle_client(mut stream: SslStream<TcpStream>, cache: &Arc<HashMap<String, V
     }
 
     println!("Outside read loop");
+}
+
+fn handle_go_away_frame(
+    go_away_frame: http2::frames::go_away_frame::GoAwayFrame,
+) -> Option<Request> {
+    println!("Recv go away");
+    None
 }
 
 fn handle_push_promise(
