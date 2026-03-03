@@ -148,19 +148,20 @@ fn handle_client(mut stream: SslStream<TcpStream>, cache: &Arc<HashMap<String, V
                             continue;
                         }
 
+                        let stream_id = settings_frame.header.stream_id;
+
                         // Send my settings
                         // TODO: Make a builder or something for SettingsFrame instantiation
                         let header = FrameHeader::<SettingsFrameFlags> {
                             length: 0,
                             frame_type: FrameType::Settings,
                             flags: SettingsFrameFlags { ack: false },
-                            stream_identifier: 0,
+                            stream_id,
                         };
                         let frame_bytes: Vec<u8> = header.into();
                         let _ = stream.write(&frame_bytes);
 
                         // Send ack
-                        // TODO: Send correct stream ident
                         let ack = SettingsFrame::new_ack(0);
                         let bytes: Vec<u8> = ack.into();
                         let _ = stream.write(&bytes);
@@ -229,7 +230,7 @@ fn handle_headers_frame(
         headers.insert(name.to_string(), value.to_string());
     }
 
-    let stream_ident = headers_frame.header.stream_identifier;
+    let stream_id = headers_frame.header.stream_id;
 
     let method = headers.get(":method").ok_or("Missing Method Header")?;
     let method = Method::from_str(method)?;
@@ -239,6 +240,7 @@ fn handle_headers_frame(
         headers,
         method,
         path,
+        stream_id,
     })
 }
 

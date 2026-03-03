@@ -65,7 +65,7 @@ impl TryFrom<&[u8]> for HeadersFrame {
         let header: FrameHeader<HeadersFrameFlags> = FrameHeader::try_from(buf)?;
         dbg!(&header);
 
-        if header.stream_identifier == 0 {
+        if header.stream_id == 0 {
             return Err("HEADERS Frame stream identifier cannot be zero".to_string());
         }
 
@@ -119,11 +119,9 @@ impl<'a> From<(&Response, &mut ConnectionState<'a>)> for HeadersFrame {
 
         let binding = res.status_code.to_code().to_string();
         dbg!(&res.status_code);
-        dbg!(&binding);
         bytes.push((":status".as_bytes().to_vec(), binding.as_bytes().to_vec()));
 
         dbg!(&res.headers);
-
         for (name, value) in &res.headers {
             let lower = name.to_lowercase();
             bytes.push((lower.into_bytes(), value.as_bytes().to_vec()));
@@ -141,7 +139,7 @@ impl<'a> From<(&Response, &mut ConnectionState<'a>)> for HeadersFrame {
                 padded: false,
                 priority: false,
             },
-            stream_identifier: 1, //TODO
+            stream_id: res.stream_id,
         };
 
         HeadersFrame {

@@ -33,10 +33,12 @@ impl StatusCode {
     }
 }
 
+#[derive(Debug)]
 pub struct Response {
     pub status_code: StatusCode,
     pub headers: HashMap<String, String>,
     pub body: Vec<u8>,
+    pub stream_id: u32,
 }
 
 impl Response {
@@ -81,6 +83,7 @@ pub struct ResponseBuilder {
     status_code: StatusCode,
     headers: HashMap<String, String>,
     body: Option<Vec<u8>>,
+    stream_id: u32,
 }
 
 macro_rules! add_if_missing {
@@ -97,6 +100,7 @@ impl ResponseBuilder {
             status_code: StatusCode::InteralServerError,
             headers: HashMap::new(),
             body: None,
+            stream_id: 0,
         }
     }
 
@@ -115,6 +119,11 @@ impl ResponseBuilder {
         self
     }
 
+    pub fn stream_id(mut self, stream_id: u32) -> Self {
+        self.stream_id = stream_id;
+        self
+    }
+
     pub fn build(self) -> Response {
         let mut headers = self.headers;
 
@@ -129,6 +138,7 @@ impl ResponseBuilder {
             status_code: self.status_code,
             headers,
             body: self.body.unwrap_or_default(),
+            stream_id: self.stream_id,
         }
     }
 }

@@ -30,43 +30,5 @@ pub struct Request {
     pub method: Method,
     pub path: String,
     pub headers: HashMap<String, String>,
-}
-
-impl Request {
-    pub fn from_bytes(bytes: [u8; 1024]) -> Result<Self, String> {
-        let request_str = String::from_utf8_lossy(&bytes);
-        let mut lines = request_str.lines();
-
-        // Get method and path
-        let first_line = lines.next().ok_or("Empty request")?;
-        let mut first_line_parts = first_line.split_whitespace();
-        let method = first_line_parts.next().ok_or("Missing Method")?.to_string();
-        let path = first_line_parts.next().ok_or("Missing path")?.to_string();
-        let version = first_line_parts
-            .next()
-            .ok_or("Missing version")?
-            .to_string();
-
-        if version != "HTTP/1.1" {
-            return Err("Unsupported HTTP version".to_string());
-        }
-
-        // Get headers
-        let mut headers = HashMap::new();
-        for line in lines.by_ref() {
-            if line.is_empty() {
-                break;
-            }
-            let mut parts = line.splitn(2, ": ");
-            let name = parts.next().ok_or("header missing name")?.to_string();
-            let value = parts.next().ok_or("Header missing value")?.to_string();
-            headers.insert(name, value);
-        }
-
-        Ok(Self {
-            method: Method::from_str(&method)?,
-            path,
-            headers,
-        })
-    }
+    pub stream_id: u32,
 }

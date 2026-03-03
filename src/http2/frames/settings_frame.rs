@@ -44,7 +44,7 @@ impl SettingsFrame {
                 length: 0,
                 frame_type: FrameType::Settings,
                 flags: SettingsFrameFlags { ack: true },
-                stream_identifier,
+                stream_id: stream_identifier,
             },
             ..Default::default()
         }

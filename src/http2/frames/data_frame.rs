@@ -87,7 +87,7 @@ impl From<&Response> for DataFrame {
                     padding: false,
                     end_stream: true,
                 },
-                stream_identifier: 1, // TODO
+                stream_id: res.stream_id,
             },
             pad_length: 0,
             data: res.body.clone(),

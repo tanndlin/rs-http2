@@ -1,3 +1,4 @@
+pub mod continuation_frame;
 pub mod data_frame;
 pub mod frame;
 pub mod frame_trait;

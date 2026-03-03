@@ -67,7 +67,7 @@ where
     pub length: u32,           //24 bits
     pub frame_type: FrameType, // 8 bits
     pub flags: T,
-    pub stream_identifier: u32, // 31 bits (R infront)
+    pub stream_id: u32, // 31 bits (R infront)
 }
 
 impl<T> From<FrameHeader<T>> for Vec<u8>
@@ -83,7 +83,7 @@ where
             val.frame_type as u8,
             val.flags.into(),
         ];
-        buf.extend_from_slice(&val.stream_identifier.to_be_bytes());
+        buf.extend_from_slice(&val.stream_id.to_be_bytes());
         buf
     }
 }
@@ -109,7 +109,7 @@ where
             length,
             frame_type,
             flags,
-            stream_identifier,
+            stream_id: stream_identifier,
         })
     }
 }
