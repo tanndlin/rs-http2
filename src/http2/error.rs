@@ -7,6 +7,7 @@ pub enum HTTP2Error {
 pub enum HTTP2ErrorCode {
     ProtocolError = 1,
     StreamClosed = 5,
+    FrameSizeError = 6,
 }
 
 pub struct StreamError {

@@ -35,6 +35,8 @@ mod response;
 mod types;
 mod util;
 
+const MAX_FRAME_SIZE: u32 = 1 << 14; // 16384
+
 fn main() {
     // Log args
     let args: Vec<String> = std::env::args().collect();
@@ -157,6 +159,17 @@ fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
                             HTTP2Stream::new(stream_id)
                         };
 
+                        // Check if the size is greater than max frame size, if so send a GOAWAY and close the connection
+                        if full_frame_length - 9 > MAX_FRAME_SIZE as usize {
+                            println!(
+                                "Received frame larger than max frame size, sending GOAWAY and closing connection"
+                            );
+                            let go_away = GoAwayFrame::from(HTTP2ErrorCode::FrameSizeError);
+                            let bytes: Vec<u8> = go_away.into();
+                            let _ = tcp_stream.write(&bytes);
+                            return;
+                        }
+
                         match stream.handle_frame(f, &mut state) {
                             Ok((stream_state, bytes)) => {
                                 println!("writing Ok to {stream_id}");
@@ -210,7 +223,7 @@ fn handle_settings_frame(settings_frame: &SettingsFrame) -> Result<Vec<u8>, HTTP
         .header_table_size(4096)
         // .max_concurrent_streams(max) // unlimited
         .initial_window_size(65535)
-        .max_frame_size(16384)
+        .max_frame_size(MAX_FRAME_SIZE)
         // .max_header_list_size(size) // unlimited
         .build();
 
