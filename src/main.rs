@@ -15,7 +15,7 @@ use crate::{
             go_away_frame::GoAwayFrame,
             ping_frame::PingFrame,
             rst_frame::RstFrame,
-            settings_frame::{SettingsFrame, SettingsFrameFlags},
+            settings_frame::{SettingsFrame, SettingsFrameBuilder, SettingsFrameFlags},
         },
         gc_buffer::GCBuffer,
         stream::http_stream::HTTP2Stream,
@@ -129,9 +129,7 @@ fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
                 let stream_id = f.get_stream_id();
 
                 match f {
-                    Frame::Settings(settings_frame) => {
-                        handle_settings_frame(&mut tcp_stream, settings_frame)
-                    }
+                    Frame::Settings(settings_frame) => handle_settings_frame(settings_frame),
                     Frame::Ping(ping_frame) => handle_ping_frame(&mut tcp_stream, ping_frame),
                     _ => {
                         // TODO: See if there is a way to do state management without push and pop
@@ -190,28 +188,32 @@ fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
     println!("Outside read loop");
 }
 
-fn handle_settings_frame(
-    tcp_stream: &mut SslStream<TcpStream>,
-    settings_frame: SettingsFrame,
-) -> Result<Vec<u8>, HTTP2Error> {
+fn handle_settings_frame(settings_frame: SettingsFrame) -> Result<Vec<u8>, HTTP2Error> {
+    if settings_frame.header.stream_id != 0 {
+        return Err(HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError));
+    }
+
     if settings_frame.header.flags.ack {
         return Ok(vec![]);
     }
 
-    let stream_id = settings_frame.header.stream_id;
-    let header = FrameHeader::<SettingsFrameFlags> {
-        length: 0,
-        frame_type: FrameType::Settings,
-        flags: SettingsFrameFlags { ack: false },
-        stream_id,
-    };
-    let frame_bytes: Vec<u8> = header.into();
-    let _ = tcp_stream.write(&frame_bytes);
-    let ack = SettingsFrame::new_ack(0);
-    let bytes: Vec<u8> = ack.into();
-    let _ = tcp_stream.write(&bytes);
+    let my_settings = SettingsFrameBuilder::new()
+        .enable_push(false)
+        .header_table_size(4096)
+        // .max_concurrent_streams(max) // unlimited
+        .initial_window_size(65535)
+        .max_frame_size(16384)
+        // .max_header_list_size(size) // unlimited
+        .build();
 
-    Ok(vec![])
+    dbg!(&my_settings);
+    let mut frame_bytes: Vec<u8> = my_settings.into();
+
+    let ack = SettingsFrame::new_ack(0);
+    let ack_bytes: Vec<u8> = ack.into();
+
+    frame_bytes.extend_from_slice(&ack_bytes);
+    Ok(frame_bytes)
 }
 
 fn handle_ping_frame(
