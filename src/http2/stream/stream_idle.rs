@@ -24,7 +24,7 @@ impl HTTP2StreamIdle {
             _ => {
                 println!("Got non-header/priority frame in idle state");
                 Err((
-                    self.close(),
+                    self.close(false), // TODO: Check whether this should be true or false
                     HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError),
                 ))
             }
@@ -40,8 +40,8 @@ impl HTTP2StreamIdle {
         ret_state.handle_frame(Frame::Headers(headers_frame), state)
     }
 
-    pub fn close(self) -> HTTP2Stream {
-        HTTP2Stream::Closed(HTTP2StreamClosed { id: self.id })
+    pub fn close(self, end_stream: bool) -> HTTP2Stream {
+        HTTP2Stream::Closed(HTTP2StreamClosed::new(self.id, end_stream))
     }
 
     pub fn open(self) -> HTTP2Stream {
