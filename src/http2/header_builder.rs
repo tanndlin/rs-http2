@@ -36,4 +36,8 @@ impl HeaderBuilder {
     pub fn new() -> Self {
         Self { data: vec![] }
     }
+
+    pub fn waiting_for_continuation(&self) -> bool {
+        !self.data.is_empty()
+    }
 }

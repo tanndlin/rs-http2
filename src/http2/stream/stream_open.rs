@@ -36,6 +36,7 @@ impl HTTP2StreamOpen {
             pending_request: None,
         }
     }
+
     pub fn handle_frame(
         self,
         frame: Frame,
@@ -224,6 +225,10 @@ impl HTTP2StreamOpen {
         let mut bytes = headers_frame.to_bytes();
         data_frame.encode_to(&mut bytes);
         Ok((self.close(true), bytes))
+    }
+
+    pub fn waiting_for_continuation(&self) -> bool {
+        self.header_builder.waiting_for_continuation()
     }
 
     pub fn close(self, end_stream: bool) -> HTTP2Stream {

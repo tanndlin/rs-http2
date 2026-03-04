@@ -12,7 +12,7 @@ use crate::{
         connection_state::ConnectionState,
         error::{HTTP2Error, HTTP2ErrorCode},
         frames::{
-            frame::{self, Frame},
+            frame::Frame,
             go_away_frame::GoAwayFrame,
             ping_frame::PingFrame,
             rst_frame::RstFrame,
@@ -123,7 +123,7 @@ fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
 
         println!("Parsing frame of length {full_frame_length}");
 
-        let result = match frame::Frame::try_from(&buffer.read_n_bytes(full_frame_length)[..]) {
+        let result = match Frame::try_from(&buffer.read_n_bytes(full_frame_length)[..]) {
             Err(e) => {
                 dbg!(&e);
                 println!("Error parsing frame: {e:?}");
@@ -137,6 +137,34 @@ fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
                     Frame::Settings(settings_frame) => handle_settings_frame(&settings_frame),
                     Frame::Ping(ping_frame) => Ok(handle_ping_frame(&mut tcp_stream, &ping_frame)),
                     _ => {
+                        // Determine if any stream is waiting for a continuation frame and, if so, which one.
+                        let waiting_for_continuation_stream_id =
+                            streams.iter().find_map(|(id, s)| {
+                                let HTTP2Stream::Open(s) = s else {
+                                    return None;
+                                };
+                                if s.waiting_for_continuation() {
+                                    Some(*id)
+                                } else {
+                                    None
+                                }
+                            });
+
+                        // If we're waiting for a continuation frame on a specific stream, then:
+                        // - Only CONTINUATION frames
+                        // - On that same stream_id
+                        // are allowed. Otherwise, send a GOAWAY and close the connection.
+                        if let Some(waiting_id) = waiting_for_continuation_stream_id
+                            && (waiting_id != stream_id || !matches!(f, Frame::Continuation(_)))
+                        {
+                            println!(
+                                "Received invalid frame while waiting for continuation, sending GOAWAY and closing connection"
+                            );
+                            let go_away = GoAwayFrame::from(HTTP2ErrorCode::ProtocolError);
+                            let _ = tcp_stream.write(&go_away.to_bytes());
+                            return;
+                        }
+
                         // TODO: See if there is a way to do state management without push and pop
                         let stream = if let Some(s) = streams.remove(&stream_id) {
                             s
