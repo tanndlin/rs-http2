@@ -81,6 +81,22 @@ fn main() {
     }
 }
 
+macro_rules! read_or_return {
+    ($buffer:expr, $stream:expr) => {
+        match $buffer.read_from_stream($stream) {
+            Ok(0) => {
+                println!("Client closed connection");
+                return;
+            }
+            Ok(_) => continue,
+            Err(e) => {
+                println!("Error reading from stream: {e}");
+                return;
+            }
+        }
+    };
+}
+
 fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
     let mut state = ConnectionState::new();
     let mut streams: HashMap<u32, HTTP2Stream> = HashMap::new();
@@ -100,32 +116,11 @@ fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
         // Check if there is a frame in the buffer, otherwise read and continue
         let full_frame_length = match buffer.peek::<3>() {
             Some(len_buf) => (u32_from_3_bytes(*len_buf) + 9) as usize,
-            None => match buffer.read_from_stream(&mut tcp_stream) {
-                Ok(0) => {
-                    println!("Client closed connection");
-                    return;
-                }
-                Ok(_) => continue,
-                Err(e) => {
-                    println!("Error reading from stream: {e}");
-                    return;
-                }
-            },
+            None => read_or_return!(buffer, &mut tcp_stream),
         };
 
-        // Add this:
         if buffer.len() < full_frame_length {
-            match buffer.read_from_stream(&mut tcp_stream) {
-                Ok(0) => {
-                    println!("Client closed connection");
-                    return;
-                }
-                Ok(_) => continue,
-                Err(e) => {
-                    println!("Error reading from stream: {e}");
-                    return;
-                }
-            }
+            read_or_return!(buffer, &mut tcp_stream);
         }
 
         println!("Parsing frame of length {full_frame_length}");
