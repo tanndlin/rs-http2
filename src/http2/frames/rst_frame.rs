@@ -13,7 +13,7 @@ impl RstFrame {
     pub fn new(stream_id: u32, e: HTTP2ErrorCode) -> Self {
         Self {
             header: FrameHeader {
-                length: 0,
+                length: 4,
                 frame_type: FrameType::RstStream,
                 flags: 0,
                 stream_id,

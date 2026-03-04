@@ -16,5 +16,8 @@
                 }
             ]
         }
-    ]
+    ],
+    "chat.tools.terminal.autoApprove": {
+        "h2spec": true
+    }
 }

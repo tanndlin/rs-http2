@@ -1,16 +1,31 @@
 use crate::http2::{
-    error::{HTTP2Error, HTTP2ErrorCode},
+    error::{HTTP2Error, HTTP2ErrorCode, StreamError},
     frames::frame::Frame,
+    stream::http_stream::HTTP2Stream,
 };
 
 pub struct HTTP2StreamClosed {
-    pub identifier: u32,
+    pub id: u32,
 }
 
 impl HTTP2StreamClosed {
-    pub fn handle_frame(&self, frame: Frame) -> Result<Vec<u8>, HTTP2Error> {
+    pub fn handle_frame(
+        self,
+        frame: Frame,
+    ) -> Result<(HTTP2Stream, Vec<u8>), (HTTP2Stream, HTTP2Error)> {
         match frame {
-            _ => Err(HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError)),
+            Frame::Priority(_) => todo!(),
+            _ => {
+                let id = self.id;
+                Err((
+                    self.close(),
+                    HTTP2Error::Stream(StreamError::new(id, HTTP2ErrorCode::StreamClosed)),
+                ))
+            }
         }
+    }
+
+    pub fn close(self) -> HTTP2Stream {
+        HTTP2Stream::Closed(HTTP2StreamClosed { id: self.id })
     }
 }

@@ -54,7 +54,6 @@ impl TryFrom<&[u8]> for HeadersFrame {
     fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
         let mut buf = buf;
         let header: FrameHeader<HeadersFrameFlags> = FrameHeader::try_from(buf)?;
-        dbg!(&header);
 
         if header.stream_id == 0 {
             return Err("HEADERS Frame stream identifier cannot be zero".to_string());
