@@ -69,18 +69,6 @@ impl Response {
             .stream_id(stream_id)
             .build()
     }
-
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let mut buffer = vec![];
-        buffer.extend_from_slice(format!("HTTP/1.1 {}\r\n", self.status_code).as_bytes());
-        for (name, value) in &self.headers {
-            buffer.extend_from_slice(format!("{name}: {value}\r\n").as_bytes());
-        }
-
-        buffer.extend_from_slice(b"\r\n");
-        buffer.extend_from_slice(&self.body);
-        buffer
-    }
 }
 
 pub struct ResponseBuilder {

@@ -39,13 +39,15 @@ fn handle_get(request: &Request) -> Result<Response, String> {
         return Ok(Response::bad_request(request.stream_id));
     }
 
-    let file_contents = read(format!("public{path}")).map_err(|_| "Unable to read file")?;
-    Ok(ResponseBuilder::new()
-        .status_code(StatusCode::Ok)
-        .header("Content-Type".to_string(), content_type.into())
-        .stream_id(request.stream_id)
-        .body(file_contents)
-        .build())
+    match read(format!("public{path}")) {
+        Ok(file_contents) => Ok(ResponseBuilder::new()
+            .status_code(StatusCode::Ok)
+            .header("Content-Type".to_string(), content_type.into())
+            .stream_id(request.stream_id)
+            .body(file_contents)
+            .build()),
+        Err(_) => Ok(Response::not_found(request.stream_id)),
+    }
 }
 
 fn handle_head(request: &Request) -> Result<Response, String> {

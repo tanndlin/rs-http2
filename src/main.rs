@@ -109,8 +109,6 @@ fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
         return;
     }
 
-    // TODO: Make sure first frame is settings
-
     let mut buffer = GCBuffer::new();
     loop {
         // Check if there is a frame in the buffer, otherwise read and continue
