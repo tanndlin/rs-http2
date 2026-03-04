@@ -30,10 +30,12 @@ impl GCBuffer {
     //     &self.data[self.cursor..self.cursor + n]
     // }
 
-    pub fn peek<const N: usize>(&self) -> &[u8; N] {
-        self.data[self.cursor..self.cursor + N]
-            .try_into()
-            .expect("slice length mismatch")
+    pub fn peek<const N: usize>(&self) -> Option<&[u8; N]> {
+        if self.cursor + N > self.data.len() {
+            return None;
+        }
+
+        Some(self.data[self.cursor..self.cursor + N].try_into().unwrap())
     }
 
     pub fn read_n_bytes(&mut self, n: usize) -> Vec<u8> {

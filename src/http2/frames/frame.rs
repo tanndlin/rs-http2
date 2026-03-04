@@ -1,7 +1,7 @@
 use crate::http2::frames::{
     data_frame::DataFrame, go_away_frame::GoAwayFrame, headers_frame::HeadersFrame,
     ping_frame::PingFrame, priority_frame::PriorityFrame, push_promise_frame::PushPromiseFrame,
-    rst_frame::RstFrame, settings_frame::SettingsFrame,
+    rst_frame::RstFrame, settings_frame::SettingsFrame, window_update_frame::WindowUpdateFrame,
 };
 
 #[repr(u8)]
@@ -16,6 +16,7 @@ pub enum FrameType {
     PushPromise = 5,
     Ping = 6,
     GoAway = 7,
+    WindowUpdate = 8,
 }
 
 impl From<u8> for FrameType {
@@ -29,6 +30,7 @@ impl From<u8> for FrameType {
             5 => FrameType::PushPromise,
             6 => FrameType::Ping,
             7 => FrameType::GoAway,
+            8 => FrameType::WindowUpdate,
             _ => FrameType::Data, // TODO: Verify if I should panic or discard
         }
     }
@@ -44,6 +46,7 @@ pub enum Frame {
     PushPromise(PushPromiseFrame),
     Ping(PingFrame),
     GoAway(GoAwayFrame),
+    WindowUpdate(WindowUpdateFrame),
 }
 
 impl TryFrom<&[u8]> for Frame {
@@ -67,6 +70,7 @@ impl TryFrom<&[u8]> for Frame {
             FrameType::PushPromise => Frame::PushPromise(PushPromiseFrame::try_from(buf)?),
             FrameType::Ping => Frame::Ping(PingFrame::try_from(buf)?),
             FrameType::GoAway => Frame::GoAway(GoAwayFrame::try_from(buf)?),
+            FrameType::WindowUpdate => Frame::WindowUpdate(WindowUpdateFrame::try_from(buf)?),
         })
     }
 }
@@ -82,6 +86,7 @@ impl Frame {
             Frame::PushPromise(f) => f.header.stream_id,
             Frame::Ping(f) => f.header.stream_id,
             Frame::GoAway(f) => f.header.stream_id,
+            Frame::WindowUpdate(f) => f.header.stream_id,
         }
     }
 }

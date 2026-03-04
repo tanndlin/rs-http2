@@ -8,3 +8,4 @@ pub mod priority_frame;
 pub mod push_promise_frame;
 pub mod rst_frame;
 pub mod settings_frame;
+pub mod window_update_frame;

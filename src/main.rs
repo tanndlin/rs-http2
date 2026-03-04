@@ -95,26 +95,35 @@ fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
 
     let mut buffer = GCBuffer::new();
     loop {
-        match buffer.read_from_stream(&mut tcp_stream) {
-            Ok(0) => {
-                dbg!("Client closed connection");
-                break;
-            } // Client closed connection
-            Ok(read) => {
-                dbg!(read);
-                read
-            }
-            Err(e) => {
-                dbg!("Error reading from stream", e);
-                break;
-            }
+        // Check if there is a frame in the buffer, otherwise read and continue
+        let full_frame_length = match buffer.peek::<3>() {
+            Some(len_buf) => (u32_from_3_bytes(len_buf) + 9) as usize,
+            None => match buffer.read_from_stream(&mut tcp_stream) {
+                Ok(0) => {
+                    println!("Client closed connection");
+                    return;
+                }
+                Ok(_) => continue,
+                Err(e) => {
+                    println!("Error reading from stream: {e}");
+                    return;
+                }
+            },
         };
 
-        let length = u32_from_3_bytes(buffer.peek::<3>());
-        dbg!(&length);
-        let full_frame_length = (length + 9) as usize;
+        // Add this:
         if buffer.len() < full_frame_length {
-            continue;
+            match buffer.read_from_stream(&mut tcp_stream) {
+                Ok(0) => {
+                    println!("Client closed connection");
+                    return;
+                }
+                Ok(_) => continue,
+                Err(e) => {
+                    println!("Error reading from stream: {e}");
+                    return;
+                }
+            }
         }
 
         println!("Parsing frame of length {full_frame_length}");
