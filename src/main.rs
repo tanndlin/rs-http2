@@ -207,9 +207,6 @@ fn handle_settings_frame(settings_frame: &SettingsFrame) -> Result<Vec<u8>, HTTP
         return Ok(vec![]);
     }
 
-    let ack = SettingsFrame::new_ack(0);
-    let mut ret = ack.to_bytes();
-
     let my_settings = SettingsFrameBuilder::new()
         .enable_push(false)
         .header_table_size(4096)
@@ -221,7 +218,8 @@ fn handle_settings_frame(settings_frame: &SettingsFrame) -> Result<Vec<u8>, HTTP
 
     dbg!(&my_settings);
 
-    my_settings.encode_to(&mut ret);
+    let mut ret = my_settings.to_bytes();
+    SettingsFrame::new_ack(0).encode_to(&mut ret);
     Ok(ret)
 }
 
