@@ -45,17 +45,18 @@ fn decode_headers(
         method,
         path,
         stream_id,
+        body: vec![],
     })
 }
 
 pub fn handle_request(request: &Request) -> Result<Response, String> {
     println!("Got request");
-    dbg!(&request);
+    // dbg!(&request);
 
     match request.method {
         Method::GET => handle_get(request),
         Method::HEAD => handle_head(request),
-        _ => Ok(Response::method_not_allowed()),
+        _ => Ok(Response::method_not_allowed(request.stream_id)),
     }
 }
 
@@ -71,7 +72,7 @@ fn handle_get(request: &Request) -> Result<Response, String> {
     let file_extension = path.split(".").last().ok_or("No file extension found")?;
     let content_type = ContentType::from_extension(file_extension);
     if content_type == ContentType::Unknown {
-        return Ok(Response::bad_request());
+        return Ok(Response::bad_request(request.stream_id));
     }
 
     let file_contents = read(format!("public{path}")).map_err(|_| "Unable to read file")?;
@@ -93,7 +94,7 @@ fn handle_head(request: &Request) -> Result<Response, String> {
     let file_extension = path.split(".").last().ok_or("No file extension found")?;
     let content_type = ContentType::from_extension(file_extension);
     if content_type == ContentType::Unknown {
-        return Ok(Response::bad_request());
+        return Ok(Response::bad_request(request.stream_id));
     }
 
     let file_contents = read(format!("public{path}")).map_err(|_| "Unable to read file")?;

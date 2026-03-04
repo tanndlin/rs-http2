@@ -37,7 +37,7 @@ impl From<DataFrameFlags> for u8 {
 pub struct DataFrame {
     pub header: FrameHeader<DataFrameFlags>,
     pad_length: u8, // Exists if padding flag is set
-    data: Vec<u8>,
+    pub data: Vec<u8>,
 }
 
 impl TryFrom<&[u8]> for DataFrame {

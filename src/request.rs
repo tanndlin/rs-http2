@@ -31,4 +31,5 @@ pub struct Request {
     pub path: String,
     pub headers: HashMap<String, String>,
     pub stream_id: u32,
+    pub body: Vec<u8>,
 }

@@ -42,6 +42,7 @@ impl HTTP2StreamIdle {
     }
 
     pub fn close(self, end_stream: bool) -> HTTP2Stream {
+        println!("Closing stream: {}", self.id);
         HTTP2Stream::Closed(HTTP2StreamClosed::new(self.id, end_stream))
     }
 

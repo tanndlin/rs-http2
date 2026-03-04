@@ -42,27 +42,31 @@ pub struct Response {
 }
 
 impl Response {
-    pub fn bad_request() -> Self {
+    pub fn bad_request(stream_id: u32) -> Self {
         ResponseBuilder::new()
             .status_code(StatusCode::BadRequest)
+            .stream_id(stream_id)
             .build()
     }
 
-    pub fn not_found() -> Self {
+    pub fn not_found(stream_id: u32) -> Self {
         ResponseBuilder::new()
             .status_code(StatusCode::NotFound)
+            .stream_id(stream_id)
             .build()
     }
 
-    pub fn method_not_allowed() -> Self {
+    pub fn method_not_allowed(stream_id: u32) -> Self {
         ResponseBuilder::new()
             .status_code(StatusCode::MethodNotAllowed)
+            .stream_id(stream_id)
             .build()
     }
 
-    pub fn internal_server_error() -> Self {
+    pub fn internal_server_error(stream_id: u32) -> Self {
         ResponseBuilder::new()
             .status_code(StatusCode::InteralServerError)
+            .stream_id(stream_id)
             .build()
     }
 

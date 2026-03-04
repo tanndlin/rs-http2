@@ -4,7 +4,8 @@ use crate::http2::{
     frames::frame::Frame,
     stream::{
         stream_closed::HTTP2StreamClosed, stream_half_closed_local::HTTP2StreamHalfClosedLocal,
-        stream_idle::HTTP2StreamIdle, stream_open::HTTP2StreamOpen,
+        stream_half_closed_remote::HTTP2StreamHalfClosedRemote, stream_idle::HTTP2StreamIdle,
+        stream_open::HTTP2StreamOpen,
     },
 };
 
@@ -14,7 +15,7 @@ pub enum HTTP2Stream {
     Open(HTTP2StreamOpen),
     ReservedLocal,
     ReservedRemote,
-    HalfClosedRemote,
+    HalfClosedRemote(HTTP2StreamHalfClosedRemote),
     HalfClosedLocal(HTTP2StreamHalfClosedLocal),
     Closed(HTTP2StreamClosed),
 }
@@ -30,7 +31,7 @@ impl HTTP2Stream {
             HTTP2Stream::Open(stream) => stream.handle_frame(frame, state),
             HTTP2Stream::ReservedLocal => todo!(),
             HTTP2Stream::ReservedRemote => todo!(),
-            HTTP2Stream::HalfClosedRemote => todo!(),
+            HTTP2Stream::HalfClosedRemote(stream) => stream.handle_frame(frame),
             HTTP2Stream::HalfClosedLocal(stream) => stream.handle_frame(frame),
             HTTP2Stream::Closed(stream) => stream.handle_frame(frame),
         }

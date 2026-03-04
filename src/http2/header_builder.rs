@@ -18,7 +18,7 @@ impl HeaderBuilder {
             .decode(&self.data)
             .map_err(|e| format!("Error decoding compressed headers: {:?}", e))?;
         self.data.clear();
-        dbg!(&decoded_headers);
+        // dbg!(&decoded_headers);
 
         let mut headers: HashMap<String, String> = HashMap::new();
         for (name, value) in decoded_headers {

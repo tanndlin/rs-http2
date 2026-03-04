@@ -19,6 +19,7 @@ use crate::{
 pub struct HTTP2StreamOpen {
     pub id: u32,
     header_builder: HeaderBuilder,
+    pending_request: Option<Request>,
 }
 
 impl HTTP2StreamOpen {
@@ -26,6 +27,7 @@ impl HTTP2StreamOpen {
         Self {
             id,
             header_builder: HeaderBuilder::new(),
+            pending_request: None,
         }
     }
     pub fn handle_frame(
@@ -34,8 +36,54 @@ impl HTTP2StreamOpen {
         state: &mut ConnectionState,
     ) -> Result<(HTTP2Stream, Vec<u8>), (HTTP2Stream, HTTP2Error)> {
         match frame {
+            Frame::Data(data_frame) => self.handle_data_frame(state, data_frame),
             Frame::Headers(headers_frame) => self.handle_headers_frame(state, headers_frame),
             _ => todo!(),
+        }
+    }
+
+    fn handle_data_frame(
+        mut self,
+        state: &mut ConnectionState,
+        data_frame: DataFrame,
+    ) -> Result<(HTTP2Stream, Vec<u8>), (HTTP2Stream, HTTP2Error)> {
+        println!("Handling data frame for stream {}", self.id);
+        let mut req = match self.pending_request.take() {
+            Some(req) => req,
+            None => {
+                return Err((
+                    self.close(false),
+                    HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError),
+                ));
+            }
+        };
+
+        req.body.extend_from_slice(&data_frame.data);
+        if data_frame.header.flags.end_stream {
+            let res = match handle_request(&req) {
+                Ok(res) => res,
+                Err(_) => {
+                    return Err((
+                        self.close(true),
+                        HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError),
+                    ));
+                }
+            };
+
+            dbg!(&res);
+
+            let mut bytes = vec![];
+            let headers_frame = HeadersFrame::from((&res, state));
+            dbg!(&headers_frame);
+            let header_bytes: Vec<u8> = headers_frame.into();
+            bytes.extend_from_slice(&header_bytes);
+            let data_frame = DataFrame::from(&res);
+            dbg!(&data_frame);
+            let data_frame_bytes: Vec<u8> = data_frame.into();
+            bytes.extend_from_slice(&data_frame_bytes);
+            Ok((self.close(true), bytes))
+        } else {
+            Ok((HTTP2Stream::Open(self), vec![]))
         }
     }
 
@@ -44,6 +92,7 @@ impl HTTP2StreamOpen {
         state: &mut ConnectionState,
         headers_frame: HeadersFrame,
     ) -> Result<(HTTP2Stream, Vec<u8>), (HTTP2Stream, HTTP2Error)> {
+        println!("Handling headers frame for stream {}", self.id);
         self.header_builder
             .new_fragment(&headers_frame.header_block_fragment);
         if !headers_frame.header.flags.end_headers {
@@ -61,7 +110,7 @@ impl HTTP2StreamOpen {
             }
         };
 
-        dbg!(&headers);
+        // dbg!(&headers);
         let method = match headers.get(":method") {
             Some(method) => method,
             None => {
@@ -97,13 +146,14 @@ impl HTTP2StreamOpen {
             method,
             path,
             stream_id: self.id,
+            body: vec![],
         };
-        // let res = handle_request(&req).map_err(|_| {
-        //     (
-        //         self.close(end_stream),
-        //         HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError),
-        //     )
-        // })?;
+
+        if !end_stream {
+            self.pending_request = Some(req);
+            return Ok((HTTP2Stream::Open(self), vec![]));
+        }
+
         let res = match handle_request(&req) {
             Ok(res) => res,
             Err(_) => {
@@ -125,10 +175,21 @@ impl HTTP2StreamOpen {
     }
 
     pub fn close(self, end_stream: bool) -> HTTP2Stream {
+        println!("Closing stream: {}", self.id);
         HTTP2Stream::Closed(HTTP2StreamClosed::new(self.id, end_stream))
     }
 
     pub fn half_close_local(self) -> HTTP2Stream {
+        println!("Half-closing stream locally: {}", self.id);
         HTTP2Stream::HalfClosedLocal(HTTP2StreamHalfClosedLocal { id: self.id })
+    }
+
+    pub fn half_close_remote(self) -> HTTP2Stream {
+        println!("Half-closing stream remotely: {}", self.id);
+        HTTP2Stream::HalfClosedRemote(
+            crate::http2::stream::stream_half_closed_remote::HTTP2StreamHalfClosedRemote {
+                id: self.id,
+            },
+        )
     }
 }

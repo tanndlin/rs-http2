@@ -134,7 +134,7 @@ fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
                 break;
             }
             Ok(f) => {
-                dbg!(&f);
+                // dbg!(&f);
                 let stream_id = f.get_stream_id();
 
                 match f {
