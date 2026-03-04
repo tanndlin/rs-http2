@@ -3,10 +3,11 @@ use crate::{
     http2::{
         error::{HTTP2Error, HTTP2ErrorCode},
         frames::{
-            data_frame::DataFrame, go_away_frame::GoAwayFrame, headers_frame::HeadersFrame,
-            ping_frame::PingFrame, priority_frame::PriorityFrame,
-            push_promise_frame::PushPromiseFrame, rst_frame::RstFrame,
-            settings_frame::SettingsFrame, window_update_frame::WindowUpdateFrame,
+            continuation_frame::ContinuationFrame, data_frame::DataFrame,
+            go_away_frame::GoAwayFrame, headers_frame::HeadersFrame, ping_frame::PingFrame,
+            priority_frame::PriorityFrame, push_promise_frame::PushPromiseFrame,
+            rst_frame::RstFrame, settings_frame::SettingsFrame,
+            window_update_frame::WindowUpdateFrame,
         },
     },
 };
@@ -24,6 +25,7 @@ pub enum FrameType {
     Ping = 6,
     GoAway = 7,
     WindowUpdate = 8,
+    Continuation = 9,
 }
 
 impl TryFrom<u8> for FrameType {
@@ -40,6 +42,7 @@ impl TryFrom<u8> for FrameType {
             6 => Ok(Self::Ping),
             7 => Ok(Self::GoAway),
             8 => Ok(Self::WindowUpdate),
+            9 => Ok(Self::Continuation),
             _ => Err(format!("Invalid frame type: {value}")),
         }
     }
@@ -56,6 +59,7 @@ pub enum Frame {
     Ping(PingFrame),
     GoAway(GoAwayFrame),
     WindowUpdate(WindowUpdateFrame),
+    Continuation(ContinuationFrame),
 }
 
 impl TryFrom<&[u8]> for Frame {
@@ -106,6 +110,10 @@ impl TryFrom<&[u8]> for Frame {
                 WindowUpdateFrame::try_from(buf)
                     .map_err(|_| HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError))?,
             ),
+            FrameType::Continuation => Frame::Continuation(
+                ContinuationFrame::try_from(buf)
+                    .map_err(|_| HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError))?,
+            ),
         })
     }
 }
@@ -122,6 +130,7 @@ impl Frame {
             Frame::Ping(f) => f.header.stream_id,
             Frame::GoAway(f) => f.header.stream_id,
             Frame::WindowUpdate(f) => f.header.stream_id,
+            Frame::Continuation(f) => f.header.stream_id,
         }
     }
 }

@@ -4,12 +4,24 @@ pub enum HTTP2Error {
     Stream(StreamError),
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 #[repr(u32)]
 pub enum HTTP2ErrorCode {
+    NoError = 0,
     ProtocolError = 1,
+    InternalError = 2,
+    FlowControlError = 3,
+    SettingsTimeout = 4,
     StreamClosed = 5,
     FrameSizeError = 6,
+    RefusedStream = 7,
+    Cancel = 8,
+    CompressionError = 9,
+    ConnectError = 10,
+    EnhanceYourCalm = 11,
+    InadequateSecurity = 12,
+    HTTP11Required = 13,
 }
 
 #[derive(Debug)]

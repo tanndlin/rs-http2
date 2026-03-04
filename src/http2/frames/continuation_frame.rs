@@ -1,5 +1,6 @@
 use crate::http2::frames::frame::FrameHeader;
 
+#[derive(Debug)]
 pub struct ContinuationFrameFlags {
     pub end_headers: bool, // bit 2
 }
@@ -12,6 +13,7 @@ impl From<u8> for ContinuationFrameFlags {
     }
 }
 
+#[derive(Debug)]
 pub struct ContinuationFrame {
     pub header: FrameHeader<ContinuationFrameFlags>,
     pub header_block_fragment: Vec<u8>,

@@ -5,7 +5,12 @@ use crate::{
     http2::{
         connection_state::ConnectionState,
         error::{HTTP2Error, HTTP2ErrorCode},
-        frames::{data_frame::DataFrame, frame::Frame, headers_frame::HeadersFrame},
+        frames::{
+            continuation_frame::{self, ContinuationFrame},
+            data_frame::DataFrame,
+            frame::Frame,
+            headers_frame::HeadersFrame,
+        },
         header_builder::HeaderBuilder,
         stream::{
             http_stream::HTTP2Stream, stream_closed::HTTP2StreamClosed,
@@ -39,6 +44,9 @@ impl HTTP2StreamOpen {
         match frame {
             Frame::Data(data_frame) => self.handle_data_frame(state, data_frame),
             Frame::Headers(headers_frame) => self.handle_headers_frame(state, headers_frame),
+            Frame::Continuation(continuation_frame) => {
+                self.handle_continuation_frame(state, continuation_frame)
+            }
             _ => todo!(),
         }
     }
@@ -88,15 +96,17 @@ impl HTTP2StreamOpen {
         self.header_builder
             .new_fragment(headers_frame.header_block_fragment);
         if !headers_frame.header.flags.end_headers {
-            todo!("Implement continuation headers")
+            return Ok((HTTP2Stream::Open(self), vec![]));
         }
+
         let end_stream = headers_frame.header.flags.end_stream;
 
-        let Ok(headers) = self.header_builder.build(&mut state.decoder) else {
-            return Err((
-                self.close(end_stream),
-                HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError),
-            ));
+        let headers = match self.header_builder.build(&mut state.decoder) {
+            Ok(headers) => headers,
+            Err(e) => {
+                println!("Error building headers: {e:?}");
+                return Err((self.close(true), e));
+            }
         };
 
         let Some(method) = headers.get(":method") else {
@@ -148,6 +158,72 @@ impl HTTP2StreamOpen {
         let mut bytes = headers_frame.to_bytes();
         data_frame.encode_to(&mut bytes);
         Ok((self.close(end_stream), bytes))
+    }
+
+    fn handle_continuation_frame(
+        mut self,
+        state: &mut ConnectionState,
+        continuation_frame: ContinuationFrame,
+    ) -> Result<(HTTP2Stream, Vec<u8>), (HTTP2Stream, HTTP2Error)> {
+        println!("Handling continuation frame for stream {}", self.id);
+        self.header_builder
+            .new_fragment(continuation_frame.header_block_fragment);
+        if !continuation_frame.header.flags.end_headers {
+            return Ok((HTTP2Stream::Open(self), vec![]));
+        }
+
+        let headers = match self.header_builder.build(&mut state.decoder) {
+            Ok(headers) => headers,
+            Err(e) => {
+                println!("Error building headers: {e:?}");
+                return Err((self.close(true), e));
+            }
+        };
+
+        let Some(method) = headers.get(":method") else {
+            return Err((
+                self.close(false),
+                HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError),
+            ));
+        };
+
+        let Ok(method) = Method::from_str(method) else {
+            return Err((
+                self.close(false),
+                HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError),
+            ));
+        };
+
+        let path = match headers.get(":path") {
+            Some(path) => path.clone(),
+            None => {
+                return Err((
+                    self.close(false),
+                    HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError),
+                ));
+            }
+        };
+
+        let req = Request {
+            headers,
+            method,
+            path,
+            stream_id: self.id,
+            body: vec![],
+        };
+
+        let Ok(res) = handle_request(&req) else {
+            return Err((
+                self.close(true),
+                HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError),
+            ));
+        };
+
+        let headers_frame = HeadersFrame::from((&res, state));
+        let data_frame = DataFrame::from(&res);
+        let mut bytes = headers_frame.to_bytes();
+        data_frame.encode_to(&mut bytes);
+        Ok((self.close(true), bytes))
     }
 
     pub fn close(self, end_stream: bool) -> HTTP2Stream {
