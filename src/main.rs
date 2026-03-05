@@ -135,7 +135,7 @@ fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
 
                 match f {
                     Frame::Settings(settings_frame) => handle_settings_frame(&settings_frame),
-                    Frame::Ping(ping_frame) => Ok(handle_ping_frame(&mut tcp_stream, ping_frame)),
+                    Frame::Ping(ping_frame) => handle_ping_frame(ping_frame),
                     _ => {
                         // Determine if any stream is waiting for a continuation frame and, if so, which one.
                         let waiting_for_continuation_stream_id =
@@ -256,14 +256,13 @@ fn handle_settings_frame(settings_frame: &SettingsFrame) -> Result<Vec<u8>, HTTP
     Ok(ret)
 }
 
-fn handle_ping_frame(
-    tcp_stream: &mut SslStream<TcpStream>,
-    ping_frame: PingFrame,
-) -> std::vec::Vec<u8> {
-    if !ping_frame.header.flags.ack {
+fn handle_ping_frame(ping_frame: PingFrame) -> Result<Vec<u8>, HTTP2Error> {
+    if ping_frame.header.flags.ack {
+        Ok(vec![])
+    } else if ping_frame.header.stream_id != 0 || ping_frame.header.length != 8 {
+        Err(HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError))
+    } else {
         let ack = PingFrame::ack(ping_frame);
-        let _ = tcp_stream.write(&ack.to_bytes());
+        Ok(ack.to_bytes())
     }
-
-    vec![]
 }
