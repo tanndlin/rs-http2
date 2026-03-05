@@ -124,6 +124,7 @@ fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
         println!("Parsing frame of length {full_frame_length}");
 
         let result = match Frame::try_from(&buffer.read_n_bytes(full_frame_length)[..]) {
+            Ok(frame) => handle_frame(&mut state, &mut streams, full_frame_length, frame),
             Err(e) => {
                 println!("Error parsing frame: {e:?}");
 
@@ -137,82 +138,6 @@ fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
                     Err(HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError))
                 } else {
                     Ok(vec![])
-                }
-            }
-            Ok(f) => {
-                // dbg!(&f);
-                let stream_id = f.get_stream_id();
-
-                match f {
-                    Frame::Settings(settings_frame) => handle_settings_frame(&settings_frame),
-                    Frame::Ping(ping_frame) => handle_ping_frame(ping_frame),
-                    _ => {
-                        // Determine if any stream is waiting for a continuation frame and, if so, which one.
-                        let waiting_for_continuation_stream_id =
-                            streams.iter().find_map(|(id, s)| {
-                                let HTTP2Stream::Open(s) = s else {
-                                    return None;
-                                };
-                                if s.waiting_for_continuation() {
-                                    Some(*id)
-                                } else {
-                                    None
-                                }
-                            });
-
-                        // If we're waiting for a continuation frame on a specific stream, then:
-                        // - Only CONTINUATION frames
-                        // - On that same stream_id
-                        // are allowed. Otherwise, send a GOAWAY and close the connection.
-                        if let Some(waiting_id) = waiting_for_continuation_stream_id
-                            && (waiting_id != stream_id || !matches!(f, Frame::Continuation(_)))
-                        {
-                            println!(
-                                "Received invalid frame while waiting for continuation, sending GOAWAY and closing connection"
-                            );
-                            let go_away = GoAwayFrame::from(HTTP2ErrorCode::ProtocolError);
-                            let _ = tcp_stream.write(&go_away.to_bytes());
-                            return;
-                        }
-
-                        // TODO: See if there is a way to do state management without push and pop
-                        let stream = if let Some(s) = streams.remove(&stream_id) {
-                            s
-                        } else {
-                            if stream_id.is_multiple_of(2)
-                                || stream_id < streams.keys().copied().max().unwrap_or(0)
-                            {
-                                let go_away = GoAwayFrame::from(HTTP2ErrorCode::ProtocolError);
-                                let _ = tcp_stream.write(&go_away.to_bytes());
-                                return;
-                            }
-
-                            HTTP2Stream::new(stream_id)
-                        };
-
-                        // Check if the size is greater than max frame size, if so send a GOAWAY and close the connection
-                        if full_frame_length - 9 > MAX_FRAME_SIZE as usize {
-                            println!(
-                                "Received frame larger than max frame size, sending GOAWAY and closing connection"
-                            );
-                            let go_away = GoAwayFrame::from(HTTP2ErrorCode::FrameSizeError);
-                            let _ = tcp_stream.write(&go_away.to_bytes());
-                            return;
-                        }
-
-                        match stream.handle_frame(f, &mut state) {
-                            Ok((stream_state, bytes)) => {
-                                println!("writing Ok to {stream_id}");
-                                streams.insert(stream_id, stream_state);
-                                Ok(bytes)
-                            }
-                            Err((stream_state, e)) => {
-                                println!("writing Err to {stream_id}");
-                                streams.insert(stream_id, stream_state);
-                                Err(e)
-                            }
-                        }
-                    }
                 }
             }
         };
@@ -241,13 +166,92 @@ fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
     );
 }
 
+fn handle_frame(
+    state: &mut ConnectionState<'_>,
+    streams: &mut HashMap<u32, HTTP2Stream>,
+    full_frame_length: usize,
+    frame: Frame,
+) -> Result<Vec<u8>, HTTP2Error> {
+    // dbg!(&f);
+    let stream_id = frame.get_stream_id();
+
+    match frame {
+        Frame::Settings(settings_frame) => handle_settings_frame(&settings_frame),
+        Frame::Ping(ping_frame) => handle_ping_frame(ping_frame),
+        _ => {
+            // Determine if any stream is waiting for a continuation frame and, if so, which one.
+            let waiting_for_continuation_stream_id = streams.iter().find_map(|(id, s)| {
+                let HTTP2Stream::Open(s) = s else {
+                    return None;
+                };
+                if s.waiting_for_continuation() {
+                    Some(*id)
+                } else {
+                    None
+                }
+            });
+
+            // If we're waiting for a continuation frame on a specific stream, then:
+            // - Only CONTINUATION frames
+            // - On that same stream_id
+            // are allowed. Otherwise, send a GOAWAY and close the connection.
+            if let Some(waiting_id) = waiting_for_continuation_stream_id
+                && (waiting_id != stream_id || !matches!(frame, Frame::Continuation(_)))
+            {
+                println!(
+                    "Received invalid frame while waiting for continuation, sending GOAWAY and closing connection"
+                );
+                return Err(HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError));
+            }
+
+            // TODO: See if there is a way to do state management without push and pop
+            let stream = if let Some(s) = streams.remove(&stream_id) {
+                s
+            } else {
+                if stream_id.is_multiple_of(2)
+                    || stream_id < streams.keys().copied().max().unwrap_or(0)
+                {
+                    return Err(HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError));
+                }
+
+                HTTP2Stream::new(stream_id)
+            };
+
+            // Check if the size is greater than max frame size, if so send a GOAWAY and close the connection
+            if full_frame_length - 9 > MAX_FRAME_SIZE as usize {
+                println!(
+                    "Received frame larger than max frame size, sending GOAWAY and closing connection"
+                );
+                return Err(HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError));
+            }
+
+            match stream.handle_frame(frame, state) {
+                Ok((stream_state, bytes)) => {
+                    println!("writing Ok to {stream_id}");
+                    streams.insert(stream_id, stream_state);
+                    Ok(bytes)
+                }
+                Err((stream_state, e)) => {
+                    println!("writing Err to {stream_id}");
+                    streams.insert(stream_id, stream_state);
+                    Err(e)
+                }
+            }
+        }
+    }
+}
+
 fn handle_settings_frame(settings_frame: &SettingsFrame) -> Result<Vec<u8>, HTTP2Error> {
     if settings_frame.header.stream_id != 0 {
         return Err(HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError));
     }
 
     if settings_frame.header.flags.ack {
-        return Ok(vec![]);
+        return if settings_frame.header.length != 0 {
+            Err(HTTP2Error::Connection(HTTP2ErrorCode::FrameSizeError))
+        } else {
+            Ok(vec![])
+        };
     }
 
     let my_settings = SettingsFrameBuilder::new()
