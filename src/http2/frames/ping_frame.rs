@@ -25,11 +25,11 @@ impl From<PingFrameFlags> for u8 {
 #[derive(Debug)]
 pub struct PingFrame {
     pub header: FrameHeader<PingFrameFlags>,
-    data: [u8; 8],
+    pub data: [u8; 8],
 }
 
 impl PingFrame {
-    pub fn ack() -> Self {
+    pub fn ack(other: PingFrame) -> Self {
         Self {
             header: FrameHeader {
                 length: 8,
@@ -37,7 +37,7 @@ impl PingFrame {
                 flags: PingFrameFlags { ack: true },
                 stream_id: 0,
             },
-            data: [0; 8],
+            data: other.data,
         }
     }
 }
