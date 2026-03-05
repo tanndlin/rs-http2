@@ -215,6 +215,7 @@ fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
                 HTTP2Error::Connection(e) => {
                     let go_away = GoAwayFrame::from(e);
                     let _ = tcp_stream.write(&go_away.to_bytes());
+                    break;
                 }
                 HTTP2Error::Stream(e) => {
                     let rst = RstFrame::from(e);
@@ -224,7 +225,10 @@ fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
         }
     }
 
-    println!("Outside read loop");
+    println!(
+        "Connection closed for peer {}",
+        tcp_stream.get_ref().peer_addr().unwrap()
+    );
 }
 
 fn handle_settings_frame(settings_frame: &SettingsFrame) -> Result<Vec<u8>, HTTP2Error> {
