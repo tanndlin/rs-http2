@@ -45,7 +45,7 @@ pub struct HeadersFrame {
     pub header: FrameHeader<HeadersFrameFlags>,
     pad_length: u8,
     exclusive: Option<bool>,
-    stream_dependency: Option<u32>, // 31 bits
+    pub stream_dependency: Option<u32>, // 31 bits
     weight: Option<u8>,
     pub header_block_fragment: Vec<u8>,
 }

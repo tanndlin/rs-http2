@@ -4,12 +4,10 @@ use crate::{
     encode_to::EncodeTo,
     http2::{
         connection_state::ConnectionState,
-        error::{HTTP2Error, HTTP2ErrorCode},
+        error::{HTTP2Error, HTTP2ErrorCode, StreamError},
         frames::{
-            continuation_frame::{self, ContinuationFrame},
-            data_frame::DataFrame,
-            frame::Frame,
-            headers_frame::HeadersFrame,
+            continuation_frame::ContinuationFrame, data_frame::DataFrame, frame::Frame,
+            headers_frame::HeadersFrame, priority_frame::PriorityFrame,
         },
         header_builder::HeaderBuilder,
         stream::{
@@ -48,6 +46,7 @@ impl HTTP2StreamOpen {
             Frame::Continuation(continuation_frame) => {
                 self.handle_continuation_frame(state, continuation_frame)
             }
+            Frame::Priority(priority_frame) => self.handle_priority_frame(&priority_frame),
             _ => todo!(),
         }
     }
@@ -98,6 +97,18 @@ impl HTTP2StreamOpen {
             .new_fragment(headers_frame.header_block_fragment);
         if !headers_frame.header.flags.end_headers {
             return Ok((HTTP2Stream::Open(self), vec![]));
+        }
+
+        if let Some(dep) = headers_frame.stream_dependency
+            && dep == headers_frame.header.stream_id
+        {
+            return Err((
+                self.close(true),
+                HTTP2Error::Stream(StreamError {
+                    stream_id: headers_frame.header.stream_id,
+                    error_code: HTTP2ErrorCode::ProtocolError,
+                }),
+            ));
         }
 
         let end_stream = headers_frame.header.flags.end_stream;
@@ -225,6 +236,26 @@ impl HTTP2StreamOpen {
         let mut bytes = headers_frame.to_bytes();
         data_frame.encode_to(&mut bytes);
         Ok((self.close(true), bytes))
+    }
+
+    fn handle_priority_frame(
+        self,
+        priority_frame: &PriorityFrame,
+    ) -> Result<(HTTP2Stream, Vec<u8>), (HTTP2Stream, HTTP2Error)> {
+        let id = self.id;
+        println!("Got priority frame for stream {id}");
+
+        if priority_frame.stream_dependency == id {
+            return Err((
+                self.close(true),
+                HTTP2Error::Stream(StreamError {
+                    stream_id: priority_frame.header.stream_id,
+                    error_code: HTTP2ErrorCode::ProtocolError,
+                }),
+            ));
+        }
+
+        Ok((HTTP2Stream::Open(self), vec![]))
     }
 
     pub fn waiting_for_continuation(&self) -> bool {

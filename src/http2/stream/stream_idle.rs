@@ -1,7 +1,7 @@
 use crate::http2::{
     connection_state::ConnectionState,
-    error::{HTTP2Error, HTTP2ErrorCode},
-    frames::{frame::Frame, headers_frame::HeadersFrame},
+    error::{HTTP2Error, HTTP2ErrorCode, StreamError},
+    frames::{frame::Frame, headers_frame::HeadersFrame, priority_frame::PriorityFrame},
     stream::{
         http_stream::HTTP2Stream, stream_closed::HTTP2StreamClosed, stream_open::HTTP2StreamOpen,
     },
@@ -20,7 +20,7 @@ impl HTTP2StreamIdle {
     ) -> Result<(HTTP2Stream, Vec<u8>), (HTTP2Stream, HTTP2Error)> {
         match frame {
             Frame::Headers(headers_frame) => self.handle_headers_frame(headers_frame, state),
-            Frame::Priority(priority_frame) => todo!(),
+            Frame::Priority(priority_frame) => self.handle_priority_frame(&priority_frame),
             Frame::PushPromise(push_promise_frame) => todo!(),
             _ => {
                 println!("Got non-header/priority frame in idle state");
@@ -49,5 +49,25 @@ impl HTTP2StreamIdle {
     pub fn open(self) -> HTTP2Stream {
         println!("Opening stream: {}", self.id);
         HTTP2Stream::Open(HTTP2StreamOpen::new(self.id))
+    }
+
+    fn handle_priority_frame(
+        self,
+        priority_frame: &PriorityFrame,
+    ) -> Result<(HTTP2Stream, Vec<u8>), (HTTP2Stream, HTTP2Error)> {
+        let id = self.id;
+        println!("Got priority frame for stream {id}");
+
+        if priority_frame.stream_dependency == id {
+            return Err((
+                self.close(true),
+                HTTP2Error::Stream(StreamError {
+                    stream_id: priority_frame.header.stream_id,
+                    error_code: HTTP2ErrorCode::ProtocolError,
+                }),
+            ));
+        }
+
+        Ok((HTTP2Stream::Idle(self), vec![]))
     }
 }
