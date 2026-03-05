@@ -22,12 +22,10 @@ impl HeaderBuilder {
         decoder: &mut Decoder,
         stream_id: u32,
     ) -> Result<HashMap<String, String>, HTTP2Error> {
-        dbg!("Decoding");
         let decoded_headers = decoder
             .decode(&self.data)
             .map_err(|_| HTTP2Error::Connection(HTTP2ErrorCode::CompressionError))?;
         self.data.clear();
-        // dbg!(&decoded_headers);
 
         let mut headers: HashMap<String, String> = HashMap::new();
         let mut seen_regular_header = false;

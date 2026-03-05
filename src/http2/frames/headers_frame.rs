@@ -109,10 +109,8 @@ impl From<(&Response, &mut ConnectionState<'_>)> for HeadersFrame {
         let mut bytes: Vec<(Vec<u8>, Vec<u8>)> = vec![];
 
         let binding = res.status_code.to_code().to_string();
-        dbg!(&res.status_code);
         bytes.push((":status".as_bytes().to_vec(), binding.as_bytes().to_vec()));
 
-        dbg!(&res.headers);
         for (name, value) in &res.headers {
             let lower = name.to_lowercase();
             bytes.push((lower.into_bytes(), value.as_bytes().to_vec()));

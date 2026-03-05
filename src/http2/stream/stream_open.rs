@@ -99,7 +99,6 @@ impl HTTP2StreamOpen {
                     HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError),
                 ));
             };
-            dbg!(&res);
 
             let mut frames = vec![HeadersFrame::from((&res, &mut *state)).into()];
             frames.push(Frame::Data(DataFrame::from(res)));
@@ -178,8 +177,6 @@ impl HTTP2StreamOpen {
             .join(path.strip_prefix('/').unwrap_or(&path))
             .to_string_lossy()
             .into_owned();
-
-        dbg!(&path);
 
         let req = Request {
             headers,
