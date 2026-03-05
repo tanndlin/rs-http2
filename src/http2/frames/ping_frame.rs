@@ -1,6 +1,9 @@
 use crate::{
     encode_to::EncodeTo,
-    http2::frames::frame::{FrameHeader, FrameType},
+    http2::{
+        error::HTTP2Error,
+        frames::frame::{FrameHeader, FrameType},
+    },
 };
 
 #[derive(Debug)]
@@ -43,11 +46,11 @@ impl PingFrame {
 }
 
 impl TryFrom<&[u8]> for PingFrame {
-    type Error = String;
+    type Error = HTTP2Error;
 
     fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
         let header = FrameHeader::try_from(buf)?;
-        let data = buf[9..17].try_into().map_err(|_| "Invalid data length")?;
+        let data = buf[9..17].try_into().unwrap();
 
         Ok(Self { header, data })
     }

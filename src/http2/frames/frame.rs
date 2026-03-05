@@ -29,7 +29,7 @@ pub enum FrameType {
 }
 
 impl TryFrom<u8> for FrameType {
-    type Error = String;
+    type Error = HTTP2Error;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
@@ -43,7 +43,7 @@ impl TryFrom<u8> for FrameType {
             7 => Ok(Self::GoAway),
             8 => Ok(Self::WindowUpdate),
             9 => Ok(Self::Continuation),
-            _ => Err(format!("Invalid frame type: {value}")),
+            _ => Err(HTTP2Error::Connection(HTTP2ErrorCode::NoError)), // Discard
         }
     }
 }
@@ -72,48 +72,18 @@ impl TryFrom<&[u8]> for Frame {
         );
 
         let frame_type = FrameType::try_from(buf[3])
-            .map_err(|_| HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError))?;
+            .map_err(|_| HTTP2Error::Connection(HTTP2ErrorCode::NoError))?; // Discard
         Ok(match frame_type {
-            FrameType::Data => Frame::Data(
-                DataFrame::try_from(buf)
-                    .map_err(|_| HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError))?,
-            ),
-            FrameType::Headers => Frame::Headers(
-                HeadersFrame::try_from(buf)
-                    .map_err(|_| HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError))?,
-            ),
-            FrameType::Priority => Frame::Priority(
-                PriorityFrame::try_from(buf)
-                    .map_err(|_| HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError))?,
-            ),
-            FrameType::RstStream => Frame::RstStream(
-                RstFrame::try_from(buf)
-                    .map_err(|_| HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError))?,
-            ),
-            FrameType::Settings => Frame::Settings(
-                SettingsFrame::try_from(buf)
-                    .map_err(|_| HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError))?,
-            ),
-            FrameType::PushPromise => Frame::PushPromise(
-                PushPromiseFrame::try_from(buf)
-                    .map_err(|_| HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError))?,
-            ),
-            FrameType::Ping => Frame::Ping(
-                PingFrame::try_from(buf)
-                    .map_err(|_| HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError))?,
-            ),
-            FrameType::GoAway => Frame::GoAway(
-                GoAwayFrame::try_from(buf)
-                    .map_err(|_| HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError))?,
-            ),
-            FrameType::WindowUpdate => Frame::WindowUpdate(
-                WindowUpdateFrame::try_from(buf)
-                    .map_err(|_| HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError))?,
-            ),
-            FrameType::Continuation => Frame::Continuation(
-                ContinuationFrame::try_from(buf)
-                    .map_err(|_| HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError))?,
-            ),
+            FrameType::Data => Frame::Data(DataFrame::try_from(buf)?),
+            FrameType::Headers => Frame::Headers(HeadersFrame::try_from(buf)?),
+            FrameType::Priority => Frame::Priority(PriorityFrame::try_from(buf)?),
+            FrameType::RstStream => Frame::RstStream(RstFrame::try_from(buf)?),
+            FrameType::Settings => Frame::Settings(SettingsFrame::try_from(buf)?),
+            FrameType::PushPromise => Frame::PushPromise(PushPromiseFrame::try_from(buf)?),
+            FrameType::Ping => Frame::Ping(PingFrame::try_from(buf)?),
+            FrameType::GoAway => Frame::GoAway(GoAwayFrame::try_from(buf)?),
+            FrameType::WindowUpdate => Frame::WindowUpdate(WindowUpdateFrame::try_from(buf)?),
+            FrameType::Continuation => Frame::Continuation(ContinuationFrame::try_from(buf)?),
         })
     }
 }
@@ -166,15 +136,13 @@ impl<T> TryFrom<&[u8]> for FrameHeader<T>
 where
     T: From<u8>,
 {
-    type Error = String;
+    type Error = HTTP2Error;
 
     fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
-        if buf.len() < 9 {
-            return Err("Frame header must be at least 9 bytes".to_string());
-        }
+        assert!(buf.len() >= 9, "Frame header must be at least 9 bytes");
 
         let length = (u32::from(buf[0]) << 16) | (u32::from(buf[1]) << 8) | u32::from(buf[2]);
-        let frame_type = FrameType::try_from(buf[3]).map_err(|_| "Invalid frame type")?;
+        let frame_type = FrameType::try_from(buf[3])?;
         let flag_bits = buf[4];
         let flags = T::from(flag_bits);
         let stream_identifier = u32::from_be_bytes([buf[5], buf[6], buf[7], buf[8]]) & !(0b1 << 31);

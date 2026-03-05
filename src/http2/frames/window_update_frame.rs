@@ -1,4 +1,7 @@
-use crate::{encode_to::EncodeTo, http2::frames::frame::FrameHeader};
+use crate::{
+    encode_to::EncodeTo,
+    http2::{error::HTTP2Error, frames::frame::FrameHeader},
+};
 
 #[derive(Debug)]
 pub struct WindowUpdateFrame {
@@ -7,13 +10,12 @@ pub struct WindowUpdateFrame {
 }
 
 impl TryFrom<&[u8]> for WindowUpdateFrame {
-    type Error = String;
+    type Error = HTTP2Error;
 
     fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
         let header = FrameHeader::<u8>::try_from(buf)?;
         let window_size_increment =
-            u32::from_be_bytes(buf[9..13].try_into().map_err(|_| "Invalid data length")?)
-                & 0x7FFF_FFFF; // mask out the most significant bit
+            u32::from_be_bytes(buf[9..13].try_into().unwrap()) & 0x7FFF_FFFF; // mask out the most significant bit
 
         Ok(Self {
             header,

@@ -126,19 +126,20 @@ fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
         let result = match Frame::try_from(&buffer.read_n_bytes(full_frame_length)[..]) {
             Ok(frame) => handle_frame(&mut state, &mut streams, full_frame_length, frame),
             Err(e) => {
-                println!("Error parsing frame: {e:?}");
+                // println!("Error parsing frame: {e:?}");
 
-                // This should be a connection error if someone was waiting for a continuation frame
-                if streams.iter().any(|(_, s)| {
-                    let HTTP2Stream::Open(s) = s else {
-                        return false;
-                    };
-                    s.waiting_for_continuation()
-                }) {
-                    Err(HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError))
-                } else {
-                    Ok(vec![])
-                }
+                // // This should be a connection error if someone was waiting for a continuation frame
+                // if streams.iter().any(|(_, s)| {
+                //     let HTTP2Stream::Open(s) = s else {
+                //         return false;
+                //     };
+                //     s.waiting_for_continuation()
+                // }) {
+                //     Err(HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError))
+                // } else {
+                //     Ok(vec![])
+                // }
+                Err(e)
             }
         };
 
@@ -147,6 +148,7 @@ fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
                 let _ = tcp_stream.write(&bytes);
             }
             Err(e) => match e {
+                HTTP2Error::Connection(HTTP2ErrorCode::NoError) => (),
                 HTTP2Error::Connection(e) => {
                     let go_away = GoAwayFrame::from(e);
                     let _ = tcp_stream.write(&go_away.to_bytes());

@@ -4,6 +4,7 @@ use crate::{
     encode_to::EncodeTo,
     http2::{
         connection_state::ConnectionState,
+        error::HTTP2Error,
         frames::frame::{FrameHeader, FrameType},
     },
     response::Response,
@@ -51,14 +52,16 @@ pub struct HeadersFrame {
 }
 
 impl TryFrom<&[u8]> for HeadersFrame {
-    type Error = String;
+    type Error = HTTP2Error;
 
     fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
         let mut buf = buf;
         let header: FrameHeader<HeadersFrameFlags> = FrameHeader::try_from(buf)?;
 
         if header.stream_id == 0 {
-            return Err("HEADERS Frame stream identifier cannot be zero".to_string());
+            return Err(HTTP2Error::Connection(
+                crate::http2::error::HTTP2ErrorCode::ProtocolError,
+            ));
         }
 
         buf = &buf[9..];
@@ -87,11 +90,7 @@ impl TryFrom<&[u8]> for HeadersFrame {
         };
 
         let mut header_block_fragment = vec![0; frag_length];
-        buf.read_exact(&mut header_block_fragment).map_err(|_| {
-            format!(
-                "HeaderFrame buffer had less than {frag_length} bytes for header block fragment"
-            )
-        })?;
+        buf.read_exact(&mut header_block_fragment).unwrap();
 
         Ok(Self {
             header,

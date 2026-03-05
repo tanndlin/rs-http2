@@ -1,7 +1,7 @@
 use crate::{
     encode_to::EncodeTo,
     http2::{
-        error::{HTTP2ErrorCode, StreamError},
+        error::{HTTP2Error, HTTP2ErrorCode, StreamError},
         frames::frame::{FrameHeader, FrameType},
     },
 };
@@ -38,12 +38,11 @@ impl From<StreamError> for RstFrame {
 }
 
 impl TryFrom<&[u8]> for RstFrame {
-    type Error = String;
+    type Error = HTTP2Error;
 
     fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
         let header = FrameHeader::try_from(buf)?;
-        let error_code =
-            u32::from_be_bytes(buf[9..13].try_into().map_err(|_| "Invalid data length")?);
+        let error_code = u32::from_be_bytes(buf[9..13].try_into().unwrap());
 
         Ok(Self { header, error_code })
     }

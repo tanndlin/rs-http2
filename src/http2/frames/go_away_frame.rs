@@ -1,7 +1,7 @@
 use crate::{
     encode_to::EncodeTo,
     http2::{
-        error::HTTP2ErrorCode,
+        error::{HTTP2Error, HTTP2ErrorCode},
         frames::frame::{FrameHeader, FrameType},
     },
 };
@@ -15,14 +15,13 @@ pub struct GoAwayFrame {
 }
 
 impl TryFrom<&[u8]> for GoAwayFrame {
-    type Error = String;
+    type Error = HTTP2Error;
 
     fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
         let header = FrameHeader::try_from(buf)?;
-        let n = u32::from_be_bytes(buf[9..13].try_into().map_err(|_| "Not enough bytes")?);
+        let n = u32::from_be_bytes(buf[9..13].try_into().unwrap());
         let last_stream_id = n & !(1 << 31);
-        let error_code =
-            u32::from_be_bytes(buf[13..17].try_into().map_err(|_| "Not enough bytes")?);
+        let error_code = u32::from_be_bytes(buf[13..17].try_into().unwrap());
 
         let data = buf[17..17 + header.length as usize].to_vec();
 

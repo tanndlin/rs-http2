@@ -1,4 +1,4 @@
-use crate::http2::frames::frame::FrameHeader;
+use crate::http2::{error::HTTP2Error, frames::frame::FrameHeader};
 
 #[derive(Debug)]
 pub struct ContinuationFrameFlags {
@@ -20,7 +20,7 @@ pub struct ContinuationFrame {
 }
 
 impl TryFrom<&[u8]> for ContinuationFrame {
-    type Error = String;
+    type Error = HTTP2Error;
 
     fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
         let header = FrameHeader::<ContinuationFrameFlags>::try_from(buf)?;

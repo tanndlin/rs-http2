@@ -1,4 +1,4 @@
-use crate::http2::frames::frame::FrameHeader;
+use crate::http2::{error::HTTP2Error, frames::frame::FrameHeader};
 
 #[derive(Debug)]
 pub struct PushPromiseFrameFlags {
@@ -27,7 +27,7 @@ pub struct PushPromiseFrame {
 }
 
 impl TryFrom<&[u8]> for PushPromiseFrame {
-    type Error = String;
+    type Error = HTTP2Error;
 
     fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
         let mut buf = buf;
@@ -44,7 +44,7 @@ impl TryFrom<&[u8]> for PushPromiseFrame {
             0
         };
 
-        let n = u32::from_be_bytes(buf[0..4].try_into().map_err(|_| "Not enough bytes")?);
+        let n = u32::from_be_bytes(buf[0..4].try_into().unwrap());
         let stream_id = n & !(1 << 31);
         buf = &buf[4..];
         let header_block_fragment = buf[..frag_length].to_vec();

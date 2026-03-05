@@ -1,4 +1,4 @@
-use crate::http2::frames::frame::FrameHeader;
+use crate::http2::{error::HTTP2Error, frames::frame::FrameHeader};
 
 #[derive(Debug)]
 pub struct PriorityFrame {
@@ -9,7 +9,7 @@ pub struct PriorityFrame {
 }
 
 impl TryFrom<&[u8]> for PriorityFrame {
-    type Error = String;
+    type Error = HTTP2Error;
 
     fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
         let header = FrameHeader::try_from(buf)?;

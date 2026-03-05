@@ -2,7 +2,10 @@ use std::io::Read;
 
 use crate::{
     encode_to::EncodeTo,
-    http2::frames::frame::{FrameHeader, FrameType},
+    http2::{
+        error::HTTP2Error,
+        frames::frame::{FrameHeader, FrameType},
+    },
     response::Response,
 };
 
@@ -42,7 +45,7 @@ pub struct DataFrame {
 }
 
 impl TryFrom<&[u8]> for DataFrame {
-    type Error = String;
+    type Error = HTTP2Error;
 
     fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
         let mut buf = buf;
@@ -58,8 +61,7 @@ impl TryFrom<&[u8]> for DataFrame {
 
         let data_length = (header.length - u32::from(pad_length)) as usize;
         let mut data = vec![0u8; data_length];
-        buf.read_exact(&mut data)
-            .map_err(|_| format!("DataFrame buffer had less than {data_length} bytes"))?;
+        buf.read_exact(&mut data).unwrap();
 
         Ok(Self {
             header,
