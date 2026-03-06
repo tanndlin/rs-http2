@@ -22,7 +22,7 @@ use crate::{
             settings_frame::{SettingsFrame, SettingsFrameBuilder},
         },
         gc_buffer::GCBuffer,
-        stream::{http_stream::HTTP2Stream, stream_closed::HTTP2StreamClosed},
+        stream::http_stream::HTTP2Stream,
     },
     read::cache_all_files,
     util::u32_from_3_bytes,
@@ -82,10 +82,9 @@ fn main() {
             Ok(tcp_stream) => {
                 let acceptor = acceptor.clone();
                 let ssl_stream = acceptor.accept(tcp_stream).unwrap();
-                let serve_location = serve_location.clone();
                 let cache = cache.clone();
 
-                pool.execute(move || handle_client(ssl_stream, serve_location, cache));
+                pool.execute(move || handle_client(ssl_stream, cache));
             }
             Err(e) => println!("Unable to get stream from client: {e}"),
         }
@@ -176,12 +175,8 @@ fn flush_outbound_frames(
     Ok(())
 }
 
-fn handle_client(
-    mut tcp_stream: SslStream<TcpStream>,
-    serve_location: PathBuf,
-    cache: Arc<HashMap<String, Vec<u8>>>,
-) {
-    let mut state = ConnectionState::new(serve_location, cache);
+fn handle_client(mut tcp_stream: SslStream<TcpStream>, cache: Arc<HashMap<String, Vec<u8>>>) {
+    let mut state = ConnectionState::new(cache);
 
     // Should start with the HTTP/2 Connection Preface
     let mut preface = [0; 24];

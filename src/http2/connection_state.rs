@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use hpack::{Decoder, Encoder};
 
@@ -14,7 +14,6 @@ pub struct ConnectionSettings {
 }
 
 pub struct ConnectionState<'a> {
-    pub serve_location: PathBuf,
     pub decoder: Decoder<'a>,
     pub encoder: Encoder<'a>,
     pub settings_acked: bool,
@@ -29,9 +28,8 @@ pub struct ConnectionState<'a> {
 }
 
 impl ConnectionState<'_> {
-    pub fn new(serve_location: PathBuf, cache: Arc<HashMap<String, Vec<u8>>>) -> Self {
+    pub fn new(cache: Arc<HashMap<String, Vec<u8>>>) -> Self {
         Self {
-            serve_location,
             cache,
             ..Default::default()
         }
@@ -120,7 +118,6 @@ impl ConnectionState<'_> {
 impl Default for ConnectionState<'_> {
     fn default() -> Self {
         ConnectionState {
-            serve_location: PathBuf::from("./public"),
             cache: Arc::new(HashMap::new()),
             decoder: Decoder::new(),
             encoder: Encoder::new(),
