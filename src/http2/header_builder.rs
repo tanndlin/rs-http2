@@ -37,6 +37,7 @@ impl HeaderBuilder {
             headers.insert(name.to_string(), value.to_string());
         }
 
+        // Check for uppercase letters in header names
         if headers
             .keys()
             .any(|h| h.chars().any(|c| c.is_ascii_uppercase()))
@@ -47,6 +48,7 @@ impl HeaderBuilder {
             }));
         }
 
+        // Check for presence of pseudo headers and that they are valid
         if headers
             .keys()
             .filter(|h| h.starts_with(':'))
@@ -56,6 +58,21 @@ impl HeaderBuilder {
                 stream_id,
                 error_code: HTTP2ErrorCode::ProtocolError,
             }));
+        }
+
+        // Make sure all pseudo headers come before regular headers
+        let mut seen_regular_header = false;
+        for header_name in headers.keys() {
+            if header_name.starts_with(':') {
+                if seen_regular_header {
+                    return Err(HTTP2Error::Stream(StreamError {
+                        stream_id,
+                        error_code: HTTP2ErrorCode::ProtocolError,
+                    }));
+                }
+            } else {
+                seen_regular_header = true;
+            }
         }
 
         Ok(headers)
