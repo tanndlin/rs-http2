@@ -75,8 +75,7 @@ impl HTTP2StreamOpen {
             dbg!(&res);
 
             let mut frames = vec![HeadersFrame::from((&res, &mut *state)).into()];
-            let data_frames = DataFrame::get_data_frames(&res, state);
-            frames.extend(data_frames.into_iter().map(|f| f.into()));
+            frames.push(Frame::Data(DataFrame::from(res)));
             Ok((self.close(true), frames))
         } else {
             Ok((HTTP2Stream::Open(self), vec![]))
@@ -162,8 +161,7 @@ impl HTTP2StreamOpen {
         };
 
         let mut frames = vec![HeadersFrame::from((&res, &mut *state)).into()];
-        let data_frames = DataFrame::get_data_frames(&res, state);
-        frames.extend(data_frames.into_iter().map(|f| f.into()));
+        frames.push(Frame::Data(DataFrame::from(res)));
         Ok((self.close(true), frames))
     }
 
@@ -227,8 +225,7 @@ impl HTTP2StreamOpen {
         };
 
         let mut frames = vec![HeadersFrame::from((&res, &mut *state)).into()];
-        let data_frames = DataFrame::get_data_frames(&res, state);
-        frames.extend(data_frames.into_iter().map(|f| f.into()));
+        frames.push(Frame::Data(DataFrame::from(res)));
         Ok((self.close(true), frames))
     }
 
