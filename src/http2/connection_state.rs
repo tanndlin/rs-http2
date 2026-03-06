@@ -20,7 +20,7 @@ pub struct ConnectionState<'a> {
     pub settings_acked: bool,
     pub settings_sent: bool,
     pub settings: ConnectionSettings,
-    pub streams: Vec<HTTP2Stream>,
+    pub streams: Vec<Option<HTTP2Stream>>,
     pub last_stream_id: u32,
     pub waiting_for_continuation: Option<u32>,
     pub window_size: i32,

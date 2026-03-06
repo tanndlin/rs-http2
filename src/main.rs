@@ -144,8 +144,8 @@ fn flush_outbound_frames(
 
                 if send_end_stream {
                     let idx = data_frame.header.stream_id.div(2) as usize;
-                    let stream = &state.streams[idx];
-                    state.streams[idx] = stream.server_sent_es();
+                    let stream = state.streams[idx].as_ref().unwrap();
+                    state.streams[idx] = Some(stream.server_sent_es());
                 }
 
                 tcp_stream.write_all(&df.to_bytes())?;
@@ -316,12 +316,10 @@ fn handle_frame(
             let stream = if state.streams.len() > idx {
                 // New stream id must be greater than last
                 // If not greater, make sure it was not a skipped stream (because its a connection error if it was; stream error if it wasn't)
-                if let HTTP2Stream::Closed(closed_stream) = &state.streams[idx]
-                    && closed_stream.skipped
-                {
+                if state.streams[idx].is_none() {
                     return Err(HTTP2Error::Connection(HTTP2ErrorCode::StreamClosed));
                 }
-                state.streams[idx].clone()
+                state.streams[idx].clone().unwrap()
             } else {
                 if stream_id.is_multiple_of(2) || stream_id <= state.last_stream_id {
                     return Err(HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError));
@@ -330,18 +328,11 @@ fn handle_frame(
                 state.last_stream_id = stream_id;
                 while state.streams.len() < idx {
                     #[allow(clippy::cast_possible_truncation)]
-                    state.streams.push(
-                        HTTP2StreamClosed {
-                            id: state.streams.len() as u32 * 2 + 1,
-                            end_stream_received: true,
-                            skipped: true,
-                        }
-                        .into(),
-                    );
+                    state.streams.push(None);
                 }
 
-                state.streams.push(HTTP2Stream::new(stream_id));
-                state.streams[idx].clone()
+                state.streams.push(Some(HTTP2Stream::new(stream_id)));
+                state.streams[idx].clone().unwrap()
             };
 
             // Check if the size is greater than max frame size, if so send a GOAWAY and close the connection
@@ -354,11 +345,11 @@ fn handle_frame(
 
             match stream.handle_frame(frame, state) {
                 Ok((stream_state, frames)) => {
-                    state.streams[stream_id.div(2) as usize] = stream_state;
+                    state.streams[stream_id.div(2) as usize] = Some(stream_state);
                     Ok(frames)
                 }
                 Err((stream_state, e)) => {
-                    state.streams[stream_id.div(2) as usize] = stream_state;
+                    state.streams[stream_id.div(2) as usize] = Some(stream_state);
                     Err(e)
                 }
             }
