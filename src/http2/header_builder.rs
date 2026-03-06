@@ -1,8 +1,11 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 use hpack::Decoder;
 
-use crate::http2::error::{HTTP2Error, HTTP2ErrorCode};
+use crate::http2::{
+    error::{HTTP2Error, HTTP2ErrorCode, StreamError},
+    psuedo_headers::PsuedoHeader,
+};
 
 #[derive(Debug)]
 pub struct HeaderBuilder {
@@ -14,7 +17,11 @@ impl HeaderBuilder {
         self.data.extend(buf);
     }
 
-    pub fn build(&mut self, decoder: &mut Decoder) -> Result<HashMap<String, String>, HTTP2Error> {
+    pub fn build(
+        &mut self,
+        decoder: &mut Decoder,
+        stream_id: u32,
+    ) -> Result<HashMap<String, String>, HTTP2Error> {
         dbg!("Decoding");
         let decoded_headers = decoder
             .decode(&self.data)
@@ -28,6 +35,27 @@ impl HeaderBuilder {
             let value = String::from_utf8_lossy(&value);
 
             headers.insert(name.to_string(), value.to_string());
+        }
+
+        if headers
+            .keys()
+            .any(|h| h.chars().any(|c| c.is_ascii_uppercase()))
+        {
+            return Err(HTTP2Error::Stream(StreamError {
+                stream_id,
+                error_code: HTTP2ErrorCode::ProtocolError,
+            }));
+        }
+
+        if headers
+            .keys()
+            .filter(|h| h.starts_with(':'))
+            .any(|h| PsuedoHeader::from_str(h).is_err())
+        {
+            return Err(HTTP2Error::Stream(StreamError {
+                stream_id,
+                error_code: HTTP2ErrorCode::ProtocolError,
+            }));
         }
 
         Ok(headers)

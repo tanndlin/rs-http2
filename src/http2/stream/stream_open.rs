@@ -117,26 +117,16 @@ impl HTTP2StreamOpen {
 
         let end_stream = headers_frame.header.flags.end_stream;
 
-        let headers = match self.header_builder.build(&mut state.decoder) {
+        let headers = match self
+            .header_builder
+            .build(&mut state.decoder, headers_frame.header.stream_id)
+        {
             Ok(headers) => headers,
             Err(e) => {
                 println!("Error building headers: {e:?}");
                 return Err((self.close(end_stream), e));
             }
         };
-
-        if headers
-            .keys()
-            .any(|h| h.chars().any(|c| c.is_ascii_uppercase()))
-        {
-            return Err((
-                self.close(end_stream),
-                HTTP2Error::Stream(StreamError {
-                    stream_id: headers_frame.header.stream_id,
-                    error_code: HTTP2ErrorCode::ProtocolError,
-                }),
-            ));
-        }
 
         let Some(method) = headers.get(":method") else {
             return Err((
@@ -204,7 +194,10 @@ impl HTTP2StreamOpen {
             return Ok((HTTP2Stream::Open(self), vec![]));
         }
 
-        let headers = match self.header_builder.build(&mut state.decoder) {
+        let headers = match self
+            .header_builder
+            .build(&mut state.decoder, continuation_frame.header.stream_id)
+        {
             Ok(headers) => headers,
             Err(e) => {
                 println!("Error building headers: {e:?}");
