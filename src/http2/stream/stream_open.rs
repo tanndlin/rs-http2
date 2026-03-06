@@ -13,6 +13,7 @@ use crate::{
         stream::{
             http_stream::HTTP2Stream, stream_closed::HTTP2StreamClosed,
             stream_half_closed_local::HTTP2StreamHalfClosedLocal,
+            stream_half_closed_remote::HTTP2StreamHalfClosedRemote,
         },
     },
     request::{Method, Request},
@@ -51,7 +52,7 @@ impl HTTP2StreamOpen {
             Frame::WindowUpdate(window_update) => {
                 if let Err(e) = state.update_window(&window_update) {
                     println!("Error updating window: {e:?}");
-                    return Err((self.close(true), e));
+                    return Err((self.close(false), e));
                 }
                 Ok((self.into(), vec![]))
             }
@@ -76,7 +77,7 @@ impl HTTP2StreamOpen {
         if data_frame.header.flags.end_stream {
             let Some(res) = handle_request(&req).ok() else {
                 return Err((
-                    self.close(true),
+                    self.close(data_frame.header.flags.end_stream),
                     HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError),
                 ));
             };
@@ -84,9 +85,9 @@ impl HTTP2StreamOpen {
 
             let mut frames = vec![HeadersFrame::from((&res, &mut *state)).into()];
             frames.push(Frame::Data(DataFrame::from(res)));
-            Ok((self.close(true), frames))
+            Ok((self.close(data_frame.header.flags.end_stream), frames))
         } else {
-            Ok((HTTP2Stream::Open(self), vec![]))
+            Ok((self.into(), vec![]))
         }
     }
 
@@ -106,7 +107,7 @@ impl HTTP2StreamOpen {
             && dep == headers_frame.header.stream_id
         {
             return Err((
-                self.close(true),
+                self.close(headers_frame.header.flags.end_stream),
                 HTTP2Error::Stream(StreamError {
                     stream_id: headers_frame.header.stream_id,
                     error_code: HTTP2ErrorCode::ProtocolError,
@@ -120,7 +121,7 @@ impl HTTP2StreamOpen {
             Ok(headers) => headers,
             Err(e) => {
                 println!("Error building headers: {e:?}");
-                return Err((self.close(true), e));
+                return Err((self.close(end_stream), e));
             }
         };
 
@@ -170,7 +171,12 @@ impl HTTP2StreamOpen {
 
         let mut frames = vec![HeadersFrame::from((&res, &mut *state)).into()];
         frames.push(Frame::Data(DataFrame::from(res)));
-        Ok((self.close(true), frames))
+
+        if end_stream {
+            Ok((self.half_close_remote(), frames))
+        } else {
+            Ok((self.into(), frames))
+        }
     }
 
     fn handle_continuation_frame(
@@ -189,7 +195,7 @@ impl HTTP2StreamOpen {
             Ok(headers) => headers,
             Err(e) => {
                 println!("Error building headers: {e:?}");
-                return Err((self.close(true), e));
+                return Err((self.close(false), e));
             }
         };
 
@@ -227,14 +233,15 @@ impl HTTP2StreamOpen {
 
         let Ok(res) = handle_request(&req) else {
             return Err((
-                self.close(true),
+                self.close(false),
                 HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError),
             ));
         };
 
         let mut frames = vec![HeadersFrame::from((&res, &mut *state)).into()];
         frames.push(Frame::Data(DataFrame::from(res)));
-        Ok((self.close(true), frames))
+
+        Ok((self.into(), frames))
     }
 
     fn handle_priority_frame(
@@ -246,7 +253,7 @@ impl HTTP2StreamOpen {
 
         if priority_frame.stream_dependency == id {
             return Err((
-                self.close(true),
+                self.close(false),
                 HTTP2Error::Stream(StreamError {
                     stream_id: priority_frame.header.stream_id,
                     error_code: HTTP2ErrorCode::ProtocolError,
@@ -284,21 +291,17 @@ impl HTTP2StreamOpen {
 
     pub fn close(self, end_stream: bool) -> HTTP2Stream {
         println!("Closing stream: {}", self.id);
-        HTTP2Stream::Closed(HTTP2StreamClosed::new(self.id, end_stream))
+        HTTP2StreamClosed::new(self.id, end_stream).into()
     }
 
     pub fn half_close_local(self) -> HTTP2Stream {
         println!("Half-closing stream locally: {}", self.id);
-        HTTP2Stream::HalfClosedLocal(HTTP2StreamHalfClosedLocal { id: self.id })
+        HTTP2StreamHalfClosedLocal { id: self.id }.into()
     }
 
     pub fn half_close_remote(self) -> HTTP2Stream {
         println!("Half-closing stream remotely: {}", self.id);
-        HTTP2Stream::HalfClosedRemote(
-            crate::http2::stream::stream_half_closed_remote::HTTP2StreamHalfClosedRemote {
-                id: self.id,
-            },
-        )
+        HTTP2StreamHalfClosedRemote { id: self.id }.into()
     }
 
     pub fn into(self) -> HTTP2Stream {

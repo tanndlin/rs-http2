@@ -60,7 +60,7 @@ impl HTTP2StreamIdle {
 
         if priority_frame.stream_dependency == id {
             return Err((
-                self.close(true),
+                self.close(false),
                 HTTP2Error::Stream(StreamError {
                     stream_id: priority_frame.header.stream_id,
                     error_code: HTTP2ErrorCode::ProtocolError,

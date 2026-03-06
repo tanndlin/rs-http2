@@ -21,7 +21,7 @@ impl HTTP2StreamHalfClosedLocal {
             Frame::WindowUpdate(window_update) => {
                 if let Err(e) = state.update_window(window_update) {
                     println!("Error updating window: {e:?}");
-                    return Err((self.close(true), e));
+                    return Err((self.close(false), e));
                 }
                 Ok((self.into(), vec![]))
             }

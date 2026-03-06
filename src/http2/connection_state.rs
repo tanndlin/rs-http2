@@ -58,17 +58,23 @@ impl ConnectionState<'_> {
 
         match window_update.header.stream_id {
             0 => {
-                self.window_size = match self
+                self.window_size = if let Some(new_size) = self
                     .window_size
                     .checked_add(window_update.window_size_increment as i32)
                 {
-                    Some(new_size) if new_size < 2i32.pow(31) => new_size,
-                    _ => {
+                    #[allow(clippy::cast_sign_loss)]
+                    if new_size > 0 && (new_size as u32) >= 2u32.pow(31) {
                         println!(
                             "Updated connection window size would exceed maximum allowed value, sending GOAWAY and closing connection"
                         );
                         return Err(HTTP2Error::Connection(HTTP2ErrorCode::FlowControlError));
                     }
+                    new_size
+                } else {
+                    println!(
+                        "Updated connection window size would exceed maximum allowed value, sending GOAWAY and closing connection"
+                    );
+                    return Err(HTTP2Error::Connection(HTTP2ErrorCode::FlowControlError));
                 };
             }
             stream_id => {

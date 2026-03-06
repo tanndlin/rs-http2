@@ -267,7 +267,7 @@ fn handle_frame(
     full_frame_length: usize,
     frame: Frame,
 ) -> Result<Vec<Frame>, HTTP2Error> {
-    // dbg!(&frame);
+    dbg!(&frame);
     let stream_id = frame.get_stream_id();
 
     // if !matches!(frame, Frame::Settings(_)) && !state.settings_acked {
@@ -340,6 +340,8 @@ fn handle_frame(
 
                 HTTP2Stream::new(stream_id)
             };
+
+            dbg!(&stream);
 
             // Check if the size is greater than max frame size, if so send a GOAWAY and close the connection
             if full_frame_length - 9 > state.settings.max_frame_size as usize {
