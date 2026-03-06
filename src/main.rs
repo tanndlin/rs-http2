@@ -116,9 +116,6 @@ fn flush_outbound_frames(
                 let available_window = (state.window_size)
                     .min(stream_window)
                     .min(state.settings.max_frame_size as i32);
-                dbg!(stream_window);
-                dbg!(state.window_size);
-                dbg!(available_window);
 
                 if available_window <= 0 {
                     outbound.push_front(Frame::Data(data_frame));
@@ -145,19 +142,13 @@ fn flush_outbound_frames(
                 state.sent_data(data_frame.header.stream_id, chunk_size as i32);
 
                 if !remaining.is_empty() {
-                    // outbound.push_front(PendingOutboundFrame::Data {
-                    //     stream_id,
-                    //     end_stream,
-                    //     payload: remaining,
-                    // });
-
                     outbound.push_front(Frame::Data(DataFrame {
                         header: FrameHeader::<DataFrameFlags> {
                             length: remaining.len() as u32,
                             frame_type: FrameType::Data,
                             flags: DataFrameFlags {
                                 padding: false,
-                                end_stream: send_end_stream,
+                                end_stream: data_frame.header.flags.end_stream,
                             },
                             stream_id: data_frame.header.stream_id,
                         },
