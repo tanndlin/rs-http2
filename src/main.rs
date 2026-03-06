@@ -308,8 +308,10 @@ fn handle_frame(
                     }
                 }
 
-                state.update_window(window_update)?;
-                return Ok(vec![]);
+                if window_update.header.stream_id == 0 {
+                    state.update_window(window_update)?;
+                    return Ok(vec![]);
+                }
             }
 
             // TODO: See if there is a way to do state management without push and pop

@@ -48,6 +48,13 @@ impl HTTP2StreamOpen {
             }
             Frame::Priority(priority_frame) => self.handle_priority_frame(&priority_frame),
             Frame::RstStream(rst_frame) => self.handle_rst_stream_frame(&rst_frame),
+            Frame::WindowUpdate(window_update) => {
+                if let Err(e) = state.update_window(&window_update) {
+                    println!("Error updating window: {e:?}");
+                    return Err((self.close(true), e));
+                }
+                Ok((self.into(), vec![]))
+            }
             _ => todo!("Open stream received unsupported frame type: {:?}", frame),
         }
     }

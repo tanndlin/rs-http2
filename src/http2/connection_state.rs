@@ -75,7 +75,7 @@ impl ConnectionState<'_> {
                 let stream_window = self
                     .stream_window_sizes
                     .entry(stream_id)
-                    .or_insert(self.settings.window_size as i32);
+                    .or_insert(self.settings.window_size);
 
                 *stream_window =
                     match stream_window.checked_add(window_update.window_size_increment as i32) {

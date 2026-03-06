@@ -60,3 +60,9 @@ impl HTTP2StreamClosed {
         }
     }
 }
+
+impl From<HTTP2StreamClosed> for HTTP2Stream {
+    fn from(s: HTTP2StreamClosed) -> Self {
+        HTTP2Stream::Closed(s)
+    }
+}
