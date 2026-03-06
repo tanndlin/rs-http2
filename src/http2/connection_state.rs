@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 use hpack::{Decoder, Encoder};
 
@@ -14,6 +14,7 @@ pub struct ConnectionSettings {
 }
 
 pub struct ConnectionState<'a> {
+    pub serve_location: PathBuf,
     pub decoder: Decoder<'a>,
     pub encoder: Encoder<'a>,
     pub settings_acked: bool,
@@ -25,8 +26,11 @@ pub struct ConnectionState<'a> {
 }
 
 impl ConnectionState<'_> {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(serve_location: PathBuf) -> Self {
+        Self {
+            serve_location,
+            ..Default::default()
+        }
     }
 
     #[allow(clippy::cast_possible_wrap)]
@@ -112,6 +116,7 @@ impl ConnectionState<'_> {
 impl Default for ConnectionState<'_> {
     fn default() -> Self {
         ConnectionState {
+            serve_location: PathBuf::from("./public"),
             decoder: Decoder::new(),
             encoder: Encoder::new(),
             settings_acked: true,

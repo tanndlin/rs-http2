@@ -5,7 +5,7 @@
                 {
                     "name": "Run",
                     "commands": [
-                        "nodemon -e rs -x 'cargo run -- dist'"
+                        "nodemon -e rs -x 'cargo run -- ./public'"
                     ]
                 },
                 {

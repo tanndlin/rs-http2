@@ -22,15 +22,8 @@ pub fn handle_request(request: &Request) -> Result<Response, String> {
 }
 
 fn handle_get(request: &Request) -> Result<Response, String> {
-    let path = if &request.path == "/" {
-        "/index.html"
-    } else {
-        &request.path
-    };
-
-    dbg!(&path);
-
-    let file_extension = path
+    let file_extension = request
+        .path
         .split('.')
         .next_back()
         .ok_or("No file extension found")?;
@@ -39,7 +32,7 @@ fn handle_get(request: &Request) -> Result<Response, String> {
         return Ok(Response::bad_request(request.stream_id));
     }
 
-    match read(format!("public{path}")) {
+    match read(request.path.clone()) {
         Ok(file_contents) => Ok(ResponseBuilder::new()
             .status_code(StatusCode::Ok)
             .header("Content-Type".to_string(), content_type.into())
@@ -51,13 +44,8 @@ fn handle_get(request: &Request) -> Result<Response, String> {
 }
 
 fn handle_head(request: &Request) -> Result<Response, String> {
-    let path = if &request.path == "/" {
-        "index.html"
-    } else {
-        &request.path
-    };
-
-    let file_extension = path
+    let file_extension = request
+        .path
         .split('.')
         .next_back()
         .ok_or("No file extension found")?;
@@ -66,7 +54,7 @@ fn handle_head(request: &Request) -> Result<Response, String> {
         return Ok(Response::bad_request(request.stream_id));
     }
 
-    let file_contents = read(format!("public{path}")).map_err(|_| "Unable to read file")?;
+    let file_contents = read(request.path.clone()).map_err(|_| "Unable to read file")?;
     Ok(ResponseBuilder::new()
         .status_code(StatusCode::Ok)
         .header("Content-Type".to_string(), content_type.into())

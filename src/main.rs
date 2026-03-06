@@ -2,6 +2,7 @@ use std::{
     collections::VecDeque,
     io::{Read, Write},
     net::{TcpListener, TcpStream},
+    path::PathBuf,
     sync::Arc,
     thread::available_parallelism,
 };
@@ -40,6 +41,13 @@ fn main() {
     // Log args
     let args: Vec<String> = std::env::args().collect();
     assert!(args.len() == 2, "Expected 1 argument (serve folder)");
+    let serve_location = PathBuf::from(&args[1]);
+    assert!(
+        serve_location.is_dir(),
+        "Serve location must be a directory, got {}",
+        args[1]
+    );
+    println!("Serving files from: {}", serve_location.display());
 
     // Build TLS acceptor
     let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
@@ -72,8 +80,8 @@ fn main() {
                 let peer_id = tcp_stream.peer_addr().unwrap();
                 dbg!(peer_id);
                 let ssl_stream = acceptor.accept(tcp_stream).unwrap();
-
-                pool.execute(move || handle_client(ssl_stream));
+                let serve_location = serve_location.clone();
+                pool.execute(move || handle_client(ssl_stream, serve_location));
             }
             Err(e) => println!("Unable to get stream from client: {e}"),
         }
@@ -166,12 +174,18 @@ fn flush_outbound_frames(
     Ok(())
 }
 
-fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
-    let mut state = ConnectionState::new();
+fn handle_client(mut tcp_stream: SslStream<TcpStream>, serve_location: PathBuf) {
+    let mut state = ConnectionState::new(serve_location);
 
     // Should start with the HTTP/2 Connection Preface
     let mut preface = [0; 24];
-    tcp_stream.read_exact(&mut preface).unwrap();
+    match tcp_stream.read_exact(&mut preface) {
+        Ok(()) => (),
+        Err(e) => {
+            println!("Error reading preface from stream: {e}");
+            return;
+        }
+    }
     if preface != b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"[..] {
         println!("Didn't recv preface, dropping client");
         return;

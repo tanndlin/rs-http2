@@ -161,14 +161,28 @@ impl HTTP2StreamOpen {
         };
 
         let path = match headers.get(":path") {
-            Some(path) => path.clone(),
+            Some(path) => {
+                if path == "/" {
+                    "index.html".to_string()
+                } else {
+                    path.clone()
+                }
+            }
             None => {
                 return Err((
-                    self.close(end_stream),
+                    self.close(false),
                     HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError),
                 ));
             }
         };
+
+        let path = state
+            .serve_location
+            .join(path.strip_prefix('/').unwrap_or(&path))
+            .to_string_lossy()
+            .into_owned();
+
+        dbg!(&path);
 
         let req = Request {
             headers,
@@ -246,7 +260,13 @@ impl HTTP2StreamOpen {
         };
 
         let path = match headers.get(":path") {
-            Some(path) => path.clone(),
+            Some(path) => {
+                if path == "/" {
+                    "index.html".to_string()
+                } else {
+                    path.clone()
+                }
+            }
             None => {
                 return Err((
                     self.close(false),
@@ -254,6 +274,12 @@ impl HTTP2StreamOpen {
                 ));
             }
         };
+
+        let path = state
+            .serve_location
+            .join(path.strip_prefix('/').unwrap_or(&path))
+            .to_string_lossy()
+            .into_owned();
 
         let req = Request {
             headers,
