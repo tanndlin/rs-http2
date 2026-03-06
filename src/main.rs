@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, VecDeque},
     io::{Read, Write},
     net::{TcpListener, TcpStream},
+    ops::Div,
     path::PathBuf,
     sync::Arc,
     thread::available_parallelism,
@@ -21,7 +22,7 @@ use crate::{
             settings_frame::{SettingsFrame, SettingsFrameBuilder},
         },
         gc_buffer::GCBuffer,
-        stream::http_stream::HTTP2Stream,
+        stream::{http_stream::HTTP2Stream, stream_closed::HTTP2StreamClosed},
     },
     read::cache_all_files,
     util::u32_from_3_bytes,
@@ -142,10 +143,9 @@ fn flush_outbound_frames(
                 );
 
                 if send_end_stream {
-                    let stream = state.streams.remove(&data_frame.header.stream_id).unwrap();
-                    state
-                        .streams
-                        .insert(data_frame.header.stream_id, stream.server_sent_es());
+                    let idx = data_frame.header.stream_id.div(2) as usize;
+                    let stream = &state.streams[idx];
+                    state.streams[idx] = stream.server_sent_es();
                 }
 
                 tcp_stream.write_all(&df.to_bytes())?;
@@ -219,14 +219,7 @@ fn handle_client(
             Ok(frame) => handle_frame(&mut state, full_frame_length, frame),
             Err(e) => {
                 // If we were waiting on conitunation frames, then this is a connection error, otherwise pass along the error
-                let waiting_for_continuation = state.streams.values().any(|s| {
-                    let HTTP2Stream::Open(s) = s else {
-                        return false;
-                    };
-                    s.waiting_for_continuation()
-                });
-
-                if waiting_for_continuation {
+                if state.waiting_for_continuation.is_some() {
                     Err(HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError))
                 } else {
                     Err(e)
@@ -280,16 +273,7 @@ fn handle_frame(
         Frame::Ping(ping_frame) => handle_ping_frame(ping_frame),
         _ => {
             // Determine if any stream is waiting for a continuation frame and, if so, which one.
-            let waiting_for_continuation_stream_id = state.streams.iter().find_map(|(id, s)| {
-                let HTTP2Stream::Open(s) = s else {
-                    return None;
-                };
-                if s.waiting_for_continuation() {
-                    Some(*id)
-                } else {
-                    None
-                }
-            });
+            let waiting_for_continuation_stream_id = state.waiting_for_continuation;
 
             // If we're waiting for a continuation frame on a specific stream, then:
             // - Only CONTINUATION frames
@@ -328,17 +312,36 @@ fn handle_frame(
                 }
             }
 
-            // TODO: See if there is a way to do state management without push and pop
-            let stream = if let Some(s) = state.streams.remove(&stream_id) {
-                s
-            } else {
-                if stream_id.is_multiple_of(2)
-                    || stream_id < state.streams.keys().copied().max().unwrap_or(0)
+            let idx = stream_id.div(2) as usize;
+            let stream = if state.streams.len() > idx {
+                // New stream id must be greater than last
+                // If not greater, make sure it was not a skipped stream (because its a connection error if it was; stream error if it wasn't)
+                if let HTTP2Stream::Closed(closed_stream) = &state.streams[idx]
+                    && closed_stream.skipped
                 {
+                    return Err(HTTP2Error::Connection(HTTP2ErrorCode::StreamClosed));
+                }
+                state.streams[idx].clone()
+            } else {
+                if stream_id.is_multiple_of(2) || stream_id <= state.last_stream_id {
                     return Err(HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError));
                 }
 
-                HTTP2Stream::new(stream_id)
+                state.last_stream_id = stream_id;
+                while state.streams.len() < idx {
+                    #[allow(clippy::cast_possible_truncation)]
+                    state.streams.push(
+                        HTTP2StreamClosed {
+                            id: state.streams.len() as u32 * 2 + 1,
+                            end_stream_received: true,
+                            skipped: true,
+                        }
+                        .into(),
+                    );
+                }
+
+                state.streams.push(HTTP2Stream::new(stream_id));
+                state.streams[idx].clone()
             };
 
             // Check if the size is greater than max frame size, if so send a GOAWAY and close the connection
@@ -351,11 +354,11 @@ fn handle_frame(
 
             match stream.handle_frame(frame, state) {
                 Ok((stream_state, frames)) => {
-                    state.streams.insert(stream_id, stream_state);
+                    state.streams[stream_id.div(2) as usize] = stream_state;
                     Ok(frames)
                 }
                 Err((stream_state, e)) => {
-                    state.streams.insert(stream_id, stream_state);
+                    state.streams[stream_id.div(2) as usize] = stream_state;
                     Err(e)
                 }
             }

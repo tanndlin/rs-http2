@@ -19,7 +19,7 @@ use crate::{
     util::handle_request,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct HTTP2StreamOpen {
     pub id: u32,
     header_builder: HeaderBuilder,
@@ -116,6 +116,7 @@ impl HTTP2StreamOpen {
         self.header_builder
             .new_fragment(headers_frame.header_block_fragment);
         if !headers_frame.header.flags.end_headers {
+            state.waiting_for_continuation = Some(self.id);
             return Ok((HTTP2Stream::Open(self), vec![]));
         }
 
@@ -319,10 +320,6 @@ impl HTTP2StreamOpen {
                 error_code,
             }),
         ))
-    }
-
-    pub fn waiting_for_continuation(&self) -> bool {
-        self.header_builder.waiting_for_continuation()
     }
 
     pub fn close(self, end_stream: bool) -> HTTP2Stream {

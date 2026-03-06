@@ -10,7 +10,7 @@ use crate::http2::{
     },
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum HTTP2Stream {
     Idle(HTTP2StreamIdle),
     Open(HTTP2StreamOpen),
@@ -44,7 +44,7 @@ impl HTTP2Stream {
         HTTP2Stream::Idle(HTTP2StreamIdle { id })
     }
 
-    pub fn server_sent_es(self) -> Self {
+    pub fn server_sent_es(&self) -> Self {
         match self {
             HTTP2Stream::Open(stream) => HTTP2StreamHalfClosedLocal { id: stream.id }.into(),
             HTTP2Stream::HalfClosedRemote(stream) => HTTP2StreamClosed::new(stream.id, true).into(),

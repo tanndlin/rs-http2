@@ -7,7 +7,7 @@ use crate::http2::{
     psuedo_headers::PsuedoHeader,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct HeaderBuilder {
     data: Vec<u8>,
 }

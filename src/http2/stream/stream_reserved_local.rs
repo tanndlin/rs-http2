@@ -3,7 +3,7 @@ use crate::http2::{
     stream::http_stream::HTTP2Stream,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct HTTP2StreamReservedLocal {
     pub id: u32,
 }

@@ -7,7 +7,7 @@ use crate::http2::{
     },
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct HTTP2StreamIdle {
     pub id: u32,
 }
@@ -64,6 +64,12 @@ impl HTTP2StreamIdle {
             ));
         }
 
-        Ok((HTTP2Stream::Idle(self), vec![]))
+        Ok((self.into(), vec![]))
+    }
+}
+
+impl From<HTTP2StreamIdle> for HTTP2Stream {
+    fn from(value: HTTP2StreamIdle) -> Self {
+        HTTP2Stream::Idle(value)
     }
 }

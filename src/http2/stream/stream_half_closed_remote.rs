@@ -5,7 +5,7 @@ use crate::http2::{
     stream::{http_stream::HTTP2Stream, stream_closed::HTTP2StreamClosed},
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct HTTP2StreamHalfClosedRemote {
     pub id: u32,
 }

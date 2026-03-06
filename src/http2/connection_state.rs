@@ -20,7 +20,9 @@ pub struct ConnectionState<'a> {
     pub settings_acked: bool,
     pub settings_sent: bool,
     pub settings: ConnectionSettings,
-    pub streams: HashMap<u32, HTTP2Stream>,
+    pub streams: Vec<HTTP2Stream>,
+    pub last_stream_id: u32,
+    pub waiting_for_continuation: Option<u32>,
     pub window_size: i32,
     pub stream_window_sizes: HashMap<u32, i32>, // TODO: this needs to be refactored into the stream struct
     pub cache: Arc<HashMap<String, Vec<u8>>>,
@@ -125,7 +127,9 @@ impl Default for ConnectionState<'_> {
             settings_acked: true,
             settings_sent: false,
             settings: ConnectionSettings::default(),
-            streams: HashMap::new(),
+            streams: vec![],
+            last_stream_id: 0,
+            waiting_for_continuation: None,
             window_size: 65535,
             stream_window_sizes: HashMap::new(),
         }
