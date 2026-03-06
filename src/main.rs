@@ -208,7 +208,21 @@ fn handle_client(mut tcp_stream: SslStream<TcpStream>) {
 
         let result = match Frame::try_from(&buffer.read_n_bytes(full_frame_length)[..]) {
             Ok(frame) => handle_frame(&mut state, full_frame_length, frame),
-            Err(e) => Err(e),
+            Err(e) => {
+                // If we were waiting on conitunation frames, then this is a connection error, otherwise pass along the error
+                let waiting_for_continuation = state.streams.values().any(|s| {
+                    let HTTP2Stream::Open(s) = s else {
+                        return false;
+                    };
+                    s.waiting_for_continuation()
+                });
+
+                if waiting_for_continuation {
+                    Err(HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError))
+                } else {
+                    Err(e)
+                }
+            }
         };
 
         match result {
