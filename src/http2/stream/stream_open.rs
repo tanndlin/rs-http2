@@ -125,6 +125,19 @@ impl HTTP2StreamOpen {
             }
         };
 
+        if headers
+            .keys()
+            .any(|h| h.chars().any(|c| c.is_ascii_uppercase()))
+        {
+            return Err((
+                self.close(end_stream),
+                HTTP2Error::Stream(StreamError {
+                    stream_id: headers_frame.header.stream_id,
+                    error_code: HTTP2ErrorCode::ProtocolError,
+                }),
+            ));
+        }
+
         let Some(method) = headers.get(":method") else {
             return Err((
                 self.close(end_stream),

@@ -267,7 +267,7 @@ fn handle_frame(
     full_frame_length: usize,
     frame: Frame,
 ) -> Result<Vec<Frame>, HTTP2Error> {
-    dbg!(&frame);
+    // dbg!(&frame);
     let stream_id = frame.get_stream_id();
 
     // if !matches!(frame, Frame::Settings(_)) && !state.settings_acked {
