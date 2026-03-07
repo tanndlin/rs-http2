@@ -116,56 +116,68 @@ fn flush_outbound_frames(
     state: &mut ConnectionState<'_>,
     outbound: &mut VecDeque<Frame>,
 ) -> std::io::Result<()> {
-    while let Some(frame) = outbound.pop_front() {
+    let mut can_send = true;
+
+    while can_send && let Some(frame) = outbound.pop_front() {
         match frame {
             Frame::Data(mut data_frame) => {
-                let stream_window = *state
-                    .stream_window_sizes
-                    .entry(data_frame.header.stream_id)
-                    .or_insert(state.settings.window_size);
-                let available_window = (state.window_size)
-                    .min(stream_window)
-                    .min(state.settings.max_frame_size as i32);
-
-                if available_window <= 0 {
-                    outbound.push_front(Frame::Data(data_frame));
-                    break;
+                // Check if stream is still open before trying to send data, if not, drop the frame
+                let stream = state
+                    .streams
+                    .get(data_frame.header.stream_id.div(2) as usize)
+                    .unwrap()
+                    .as_ref()
+                    .unwrap();
+                if let HTTP2Stream::Closed(_) = stream {
+                    continue;
                 }
 
-                let chunk_size = (data_frame.data.len()).min(available_window as usize);
-                let remaining = data_frame.data.split_off(chunk_size);
-                let send_end_stream = remaining.is_empty() && data_frame.header.flags.end_stream;
+                let mut buf = vec![];
+                let mut cursor = 0;
+                loop {
+                    let stream_window = *state
+                        .stream_window_sizes
+                        .entry(data_frame.header.stream_id)
+                        .or_insert(state.settings.window_size);
+                    let available_window = (state.window_size)
+                        .min(stream_window)
+                        .min(state.settings.max_frame_size as i32);
 
-                let df = DataFrame::new(
-                    data_frame.header.stream_id,
-                    data_frame.data,
-                    send_end_stream,
-                );
+                    if available_window <= 0 {
+                        data_frame.header.length = (data_frame.data.len() - cursor) as u32;
+                        data_frame.data = data_frame.data[cursor..].to_vec();
+                        outbound.push_front(Frame::Data(data_frame));
+                        can_send = false;
+                        break;
+                    }
 
-                if send_end_stream {
-                    let idx = data_frame.header.stream_id.div(2) as usize;
-                    let stream = state.streams[idx].as_ref().unwrap();
-                    state.streams[idx] = Some(stream.server_sent_es());
-                }
+                    let chunk_size = (data_frame.data.len()).min(available_window as usize);
+                    let send_end_stream = cursor + chunk_size >= data_frame.data.len()
+                        && data_frame.header.flags.end_stream;
 
-                tcp_stream.write_all(&df.to_bytes())?;
-                state.sent_data(data_frame.header.stream_id, chunk_size as i32);
-
-                if !remaining.is_empty() {
-                    outbound.push_front(Frame::Data(DataFrame {
-                        header: FrameHeader::<DataFrameFlags> {
-                            length: remaining.len() as u32,
-                            frame_type: FrameType::Data,
-                            flags: DataFrameFlags {
-                                padding: false,
-                                end_stream: data_frame.header.flags.end_stream,
-                            },
-                            stream_id: data_frame.header.stream_id,
+                    let header = FrameHeader {
+                        length: chunk_size as u32,
+                        frame_type: FrameType::Data,
+                        flags: DataFrameFlags {
+                            end_stream: send_end_stream,
+                            padding: false,
                         },
-                        data: remaining,
-                        pad_length: 0,
-                    }));
+                        stream_id: data_frame.header.stream_id,
+                    };
+
+                    header.encode_to(&mut buf);
+                    buf.extend_from_slice(&data_frame.data[cursor..cursor + chunk_size]);
+
+                    cursor += chunk_size;
+                    state.sent_data(data_frame.header.stream_id, chunk_size as i32);
+
+                    if cursor + chunk_size >= data_frame.data.len() {
+                        break;
+                    }
                 }
+
+                tcp_stream.write_all(&buf)?;
+                tcp_stream.flush()?;
             }
             frame => {
                 tcp_stream.write_all(&frame.to_bytes())?;
@@ -371,7 +383,7 @@ fn handle_settings_frame(
         };
     }
 
-    dbg!(&settings_frame);
+    // dbg!(&settings_frame);
 
     if let Some(initial_window_size) = settings_frame.initial_window_size {
         #[allow(clippy::cast_possible_wrap)]
@@ -399,7 +411,7 @@ fn handle_settings_frame(
             .enable_push(false)
             .header_table_size(4096)
             // .max_concurrent_streams(max) // unlimited
-            .initial_window_size(65535)
+            .initial_window_size(6_291_456)
             .max_frame_size(state.settings.max_frame_size)
             // .max_header_list_size(size) // unlimited
             .build();

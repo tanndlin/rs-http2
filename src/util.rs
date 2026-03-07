@@ -14,8 +14,6 @@ pub fn handle_request(
     request: &Request,
     cache: &Arc<HashMap<String, Vec<u8>>>,
 ) -> Result<Response, String> {
-    dbg!(&request);
-
     match request.method {
         Method::GET => handle_get(request, cache),
         Method::HEAD => handle_head(request, cache),

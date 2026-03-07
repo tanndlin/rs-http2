@@ -120,6 +120,23 @@ impl Frame {
     }
 }
 
+impl EncodeTo for Frame {
+    fn encode_to(self, buf: &mut Vec<u8>) {
+        match self {
+            Frame::Data(f) => f.encode_to(buf),
+            Frame::Headers(f) => f.encode_to(buf),
+            Frame::Priority(f) => f.encode_to(buf),
+            Frame::RstStream(f) => f.encode_to(buf),
+            Frame::Settings(f) => f.encode_to(buf),
+            Frame::PushPromise(f) => f.encode_to(buf),
+            Frame::Ping(f) => f.encode_to(buf),
+            Frame::GoAway(f) => f.encode_to(buf),
+            Frame::WindowUpdate(f) => f.encode_to(buf),
+            Frame::Continuation(f) => f.encode_to(buf),
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct FrameHeader<T>
 where
