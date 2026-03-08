@@ -14,9 +14,9 @@ use crate::{
         connection_state::ConnectionState,
         error::{HTTP2Error, HTTP2ErrorCode, StreamError},
         frames::{
-            data_frame::{DataFrame, DataFrameFlags},
+            data_frame::DataFrameFlags,
             frame::{Frame, FrameHeader, FrameType},
-            go_away_frame::{self, GoAwayFrame},
+            go_away_frame::GoAwayFrame,
             ping_frame::PingFrame,
             rst_frame::RstFrame,
             settings_frame::{SettingsFrame, SettingsFrameBuilder},
@@ -55,13 +55,17 @@ fn main() {
     let cache = Arc::new(cache_all_files(serve_location.to_str().unwrap()).unwrap());
     println!("Cached {} files", cache.len());
 
+    // Check env for cert dir otherwise .
+    let cert_dir = std::env::var("CERT_DIR").unwrap_or_else(|_| ".".to_string());
+    println!("Using certs from: {cert_dir}");
+
     // Build TLS acceptor
     let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
     builder
-        .set_private_key_file("localhost+1-key.pem", SslFiletype::PEM)
+        .set_private_key_file(format!("{cert_dir}/localhost+1-key.pem"), SslFiletype::PEM)
         .unwrap();
     builder
-        .set_certificate_chain_file("localhost+1.pem")
+        .set_certificate_chain_file(format!("{cert_dir}/localhost+1.pem"))
         .unwrap();
 
     // Enable HTTP/2 via ALPN
