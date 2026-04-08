@@ -76,6 +76,7 @@ impl HTTP2StreamOpen {
 
         req.body.extend(data_frame.data);
         if !end_stream {
+            self.pending_request = Some(req);
             return Ok((self.into(), vec![]));
         }
 
