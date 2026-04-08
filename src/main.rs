@@ -288,16 +288,17 @@ fn handle_frame(
 
     match frame {
         Frame::GoAway(go_away_frame) => {
-            let reason = String::from_utf8_lossy(&go_away_frame.data);
-            println!(
-                "Received GOAWAY frame. Last stream ID: {}, Error code: {:?}, Reason: {}",
-                go_away_frame.last_stream_id,
-                HTTP2ErrorCode::try_from(go_away_frame.error_code).unwrap(),
-                reason
-            );
-            Err(HTTP2Error::Connection(
-                HTTP2ErrorCode::try_from(go_away_frame.error_code).unwrap(),
-            ))
+            // let reason = String::from_utf8_lossy(&go_away_frame.data);
+            let stream_id = go_away_frame.header.stream_id;
+            if stream_id != 0 {
+                return Err(HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError));
+            }
+
+            let code = HTTP2ErrorCode::try_from(go_away_frame.error_code);
+            match code {
+                Ok(code) => Err(HTTP2Error::Connection(code)),
+                Err(()) => Err(HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError)),
+            }
         }
         Frame::PushPromise(_) => Err(HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError)),
         Frame::Settings(settings_frame) => handle_settings_frame(&settings_frame, state),
