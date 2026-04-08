@@ -114,6 +114,26 @@ impl HTTP2StreamOpen {
         state: &mut ConnectionState,
         headers_frame: HeadersFrame,
     ) -> Result<(HTTP2Stream, Vec<Frame>), (HTTP2Stream, HTTP2Error)> {
+        // If pending_request is already set, this is a trailers HEADERS frame.
+        // Trailers don't have pseudo-headers, so skip normal header parsing.
+        if let Some(req) = self.pending_request.take() {
+            if !headers_frame.header.flags.end_stream {
+                return Err((
+                    self.close(false),
+                    HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError),
+                ));
+            }
+            let Some(res) = handle_request(&req, state).ok() else {
+                return Err((
+                    self.close(true),
+                    HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError),
+                ));
+            };
+            let mut frames = vec![HeadersFrame::from((&res, &mut *state)).into()];
+            frames.push(Frame::Data(DataFrame::from(res)));
+            return Ok((self.into().server_sent_es(), frames));
+        }
+
         self.header_builder
             .new_fragment(headers_frame.header_block_fragment);
         if !headers_frame.header.flags.end_headers {
@@ -180,6 +200,8 @@ impl HTTP2StreamOpen {
             stream_id: self.id,
             body: vec![],
         };
+
+        dbg!("Built request from headers frame: {:?}", &req);
 
         if !end_stream {
             self.pending_request = Some(Box::new(req));
