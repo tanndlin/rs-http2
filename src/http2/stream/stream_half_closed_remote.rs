@@ -32,7 +32,10 @@ impl HTTP2StreamHalfClosedRemote {
                 );
                 Ok((self.close(true), vec![]))
             }
-            _ => todo!("Frame not implemented for half closed remote stream: {frame:?}"),
+            _ => Err((
+                self.into(),
+                HTTP2Error::Connection(HTTP2ErrorCode::ProtocolError),
+            )),
         }
     }
 
